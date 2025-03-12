@@ -1,5 +1,6 @@
 import { dataUtils } from '../utils/dataUtils';
 import { categoryConfigs } from '../utils/constants';
+import { groupingService } from './groupingService';
 
 // Cache for statistics calculations
 const statsCache = new Map();
@@ -15,12 +16,12 @@ export const statsService = {
    * @returns {Object|null} Summary statistics or null if no data
    */
   calculateSummaryStats(data, year) {
-    // Generate a cache key based on data length, first/last item, and year
     if (!data || !data.length) {
       console.warn('[StatsService] No data provided for statistics calculation');
       return null;
     }
     
+    // Generate cache key
     const cacheKey = `stats_${year}_${data.length}_${data[0]?.['S no']}_${data[data.length-1]?.['S no']}`;
     
     // Check cache
@@ -32,28 +33,142 @@ export const statsService = {
     console.log('[StatsService] Calculating summary statistics');
 
     try {
+      // Group data by different parameters
+      const byLocation = groupingService.groupByLocation(data);
+      const bySource = groupingService.groupBySource(data);
+      const byStatus = groupingService.groupByStatus(data);
+      const byPaymentMode = groupingService.groupByPaymentMode(data);
+      const byMonth = groupingService.groupByDate(data, 'month');
+      
+      // Calculate base statistics
       const stats = {
         totalBookings: data.length,
         totalCollection: dataUtils.sum(data, 'Total Paid'),
         totalSlots: dataUtils.sum(data, 'Number of slots'),
-        uniqueCustomers: new Set(data
-          .map(booking => {
-            const phone = booking["Phone"];
-            if (!phone) return null;
-            // Convert to string and normalize phone number by removing spaces, dashes, and other non-digit characters
-            return String(phone).replace(/\D/g, '');
-          })
-          .filter(Boolean)).size,
+        uniqueCustomers: new Set(data.map(b => b.Phone)).size,
         totalBalance: dataUtils.sum(data, 'Balance'),
         avgRevenuePerSlot: this.calculateAverage(data, 'Total Paid', 'Number of slots'),
         completionRate: this.calculateCompletionRate(data)
       };
       
-      // Add additional stats
-      stats.avgBookingValue = stats.totalBookings ? stats.totalCollection / stats.totalBookings : 0;
-      stats.paymentRate = stats.totalCollection ? ((stats.totalCollection - stats.totalBalance) / stats.totalCollection) * 100 : 0;
-
-      console.log('[StatsService] Statistics calculated successfully');
+      // Add source-based stats
+      stats.sourceStats = {
+        online: (bySource.online || []).length,
+        offline: (bySource.offline || []).length,
+        onlinePercentage: data.length ? ((bySource.online || []).length / data.length) * 100 : 0
+      };
+      
+      // Add status-based stats
+      stats.statusStats = {
+        confirmed: (byStatus.confirmed || []).length,
+        cancelled: (byStatus.cancelled || []).length,
+        partially_cancelled: (byStatus.partially_cancelled || []).length,
+        confirmationRate: data.length ? ((byStatus.confirmed || []).length / data.length) * 100 : 0
+      };
+      
+      // ----- PAYMENT CALCULATION USING DIRECT APPROACH -----
+      // Helper function to safely parse currency values
+      const getCurrencyValueSum = (fieldName) => {
+        return data.reduce((total, booking) => {
+          // Get the value from the booking
+          const value = booking[fieldName];
+          
+          // Skip undefined, null or empty values
+          if (value === undefined || value === null || value === '') {
+            return total;
+          }
+          
+          // Parse the value - remove currency symbols and commas
+          const sanitized = typeof value === 'string' 
+                            ? value.replace(/[₹,]/g, '').trim()
+                            : String(value);
+          
+          // Convert to number and add to total (handle NaN)
+          const numericValue = parseFloat(sanitized);
+          return total + (isNaN(numericValue) ? 0 : numericValue);
+        }, 0);
+      };
+      
+      // Calculate payment amounts directly from all bookings (not relying on grouped data)
+      const cashAmount = getCurrencyValueSum('Cash');
+      const bankAmount = getCurrencyValueSum('UPI') + getCurrencyValueSum('Bank Transfer');
+      const hudleAmount = getCurrencyValueSum('Hudle App') + 
+                        getCurrencyValueSum('Hudle QR') + 
+                        getCurrencyValueSum('Hudle Wallet') + 
+                        getCurrencyValueSum('Venue Wallet') + 
+                        getCurrencyValueSum('Hudle Pass') + 
+                        getCurrencyValueSum('Hudle Discount');
+      
+      // Add payment stats
+      stats.paymentStats = {
+        cash: {
+          count: data.filter(b => parseFloat(b['Cash'] || 0) > 0).length,
+          amount: cashAmount
+        },
+        bank: {
+          count: data.filter(b => (parseFloat(b['UPI'] || 0) + parseFloat(b['Bank Transfer'] || 0)) > 0).length,
+          amount: bankAmount
+        },
+        hudle: {
+          count: data.filter(b => {
+            const hudleSum = parseFloat(b['Hudle App'] || 0) + 
+                          parseFloat(b['Hudle QR'] || 0) + 
+                          parseFloat(b['Hudle Wallet'] || 0) + 
+                          parseFloat(b['Venue Wallet'] || 0) + 
+                          parseFloat(b['Hudle Pass'] || 0) + 
+                          parseFloat(b['Hudle Discount'] || 0);
+            return hudleSum > 0;
+          }).length,
+          amount: hudleAmount
+        }
+      };
+      
+      // Verify the direct calculation matches the total
+      const totalPayments = cashAmount + bankAmount + hudleAmount;
+      const totalCollection = dataUtils.sum(data, 'Total Paid');
+      
+      // Log verification for debugging
+      console.log('[StatsService] Payment calculation verification:');
+      console.log(`  Total Collection: ${totalCollection}`);
+      console.log(`  Cash Payment: ${cashAmount}`);
+      console.log(`  Bank Payment: ${bankAmount}`);
+      console.log(`  Hudle Payment: ${hudleAmount}`);
+      console.log(`  Sum of Payment Modes: ${totalPayments}`);
+      console.log(`  Difference: ${Math.abs(totalCollection - totalPayments)}`);
+      
+      // If there's still a significant difference, log a warning
+      if (Math.abs(totalPayments - totalCollection) > 10) {
+        console.warn(`[StatsService] WARNING: Payment calculation discrepancy (${totalPayments}) doesn't match total collection (${totalCollection})`);
+      }
+      
+      // Calculate payment percentages
+      if (totalPayments > 0) {
+        stats.paymentStats.cash.percentage = (cashAmount / totalPayments) * 100;
+        stats.paymentStats.bank.percentage = (bankAmount / totalPayments) * 100;
+        stats.paymentStats.hudle.percentage = (hudleAmount / totalPayments) * 100;
+      } else {
+        stats.paymentStats.cash.percentage = 0;
+        stats.paymentStats.bank.percentage = 0;
+        stats.paymentStats.hudle.percentage = 0;
+      }
+      
+      // Add monthly distribution
+      stats.monthlyStats = Object.entries(byMonth).map(([month, bookings]) => ({
+        month,
+        bookings: bookings.length,
+        revenue: dataUtils.sum(bookings, 'Total Paid'),
+        slots: dataUtils.sum(bookings, 'Number of slots'),
+        uniqueCustomers: new Set(bookings.map(b => b.Phone)).size
+      }));
+      
+      // Add location distribution
+      stats.locationStats = Object.entries(byLocation).map(([locationId, bookings]) => ({
+        locationId,
+        bookings: bookings.length,
+        revenue: dataUtils.sum(bookings, 'Total Paid'),
+        slots: dataUtils.sum(bookings, 'Number of slots'),
+        uniqueCustomers: new Set(bookings.map(b => b.Phone)).size
+      }));
       
       // Cache the result
       statsCache.set(cacheKey, stats);
@@ -72,49 +187,100 @@ export const statsService = {
   },
 
   /**
-   * Calculate statistics for a specific category
+   * Calculate statistics for a specific category using grouping service
    * @param {Array} data - Array of booking objects
    * @param {string} category - Category value
    * @param {Object} config - Category configuration
-   * @param {string} year - The year of the data
    * @returns {Object} Category statistics
    */
-  calculateCategoryStats(data, category, config, year) {
+  calculateCategoryStats(data, category, config) {
     console.log(`[StatsService] Calculating stats for category: ${category}`);
     
     try {
-      const categoryBookings = data.filter(booking => 
-        booking[config.valueField] === category
-      );
-      
-      // Return default stats if no bookings found
-      if (!categoryBookings || categoryBookings.length === 0) {
-        return {
-          totalBookings: 0,
-          totalCollection: 0,
-          totalSlots: 0,
-          uniqueCustomers: 0,
-          totalBalance: 0,
-          avgRevenuePerSlot: 0,
-          completionRate: 0,
-          avgBookingValue: 0,
-          paymentRate: 0
-        };
+      // Get the appropriate grouping function based on category type
+      let groupingFunction;
+      switch (config.category.toLowerCase()) {
+        case 'location':
+          groupingFunction = groupingService.groupByLocation;
+          break;
+        case 'month':
+          groupingFunction = (data) => groupingService.groupByDate(data, 'month');
+          break;
+        case 'sport':
+          groupingFunction = groupingService.groupBySport;
+          break;
+        case 'status':
+          groupingFunction = groupingService.groupByStatus;
+          break;
+        case 'source':
+          groupingFunction = groupingService.groupBySource;
+          break;
+        default:
+          throw new Error(`Unknown category type: ${config.category}`);
       }
       
-      const baseStats = this.calculateSummaryStats(categoryBookings, year);
-      const extraStats = {};
-
+      // Group the data
+      const groupedData = groupingFunction(data);
+      const categoryData = groupedData[category] || [];
+      
+      // Calculate statistics for this category
+      const stats = {
+        totalBookings: categoryData.length,
+        totalCollection: dataUtils.sum(categoryData, 'Total Paid'),
+        totalSlots: dataUtils.sum(categoryData, 'Number of slots'),
+        uniqueCustomers: new Set(categoryData.map(b => b.Phone)).size,
+        totalBalance: dataUtils.sum(categoryData, 'Balance'),
+        avgRevenuePerSlot: this.calculateAverage(categoryData, 'Total Paid', 'Number of slots'),
+        completionRate: this.calculateCompletionRate(categoryData)
+      };
+      
+      // Add payment mode distribution
+      const paymentModes = groupingService.groupByPaymentMode(categoryData);
+      
+      // Helper function to safely parse currency values
+      const getCurrencyValueSum = (fieldName) => {
+        return categoryData.reduce((total, booking) => {
+          // Get the value from the booking
+          const value = booking[fieldName];
+          
+          // Skip undefined, null or empty values
+          if (value === undefined || value === null || value === '') {
+            return total;
+          }
+          
+          // Parse the value - remove currency symbols and commas
+          const sanitized = typeof value === 'string' 
+                            ? value.replace(/[₹,]/g, '').trim()
+                            : String(value);
+          
+          // Convert to number and add to total (handle NaN)
+          const numericValue = parseFloat(sanitized);
+          return total + (isNaN(numericValue) ? 0 : numericValue);
+        }, 0);
+      };
+      
+      // Calculate payment amounts directly
+      stats.paymentDistribution = {
+        cash: getCurrencyValueSum('Cash'),
+        bank: getCurrencyValueSum('UPI') + getCurrencyValueSum('Bank Transfer'),
+        hudle: getCurrencyValueSum('Hudle App') + 
+               getCurrencyValueSum('Hudle QR') + 
+               getCurrencyValueSum('Hudle Wallet') + 
+               getCurrencyValueSum('Venue Wallet') + 
+               getCurrencyValueSum('Hudle Pass') + 
+               getCurrencyValueSum('Hudle Discount')
+      };
+      
+      // Add any extra stats defined in the config
       if (config.extraStats) {
         config.extraStats.forEach(stat => {
-          extraStats[stat.label] = stat.calculate(categoryBookings);
+          stats[stat.label] = stat.calculate(categoryData);
         });
       }
-
-      console.log(`[StatsService] Category stats calculated for: ${category}`);
-      return { ...baseStats, ...extraStats };
+      
+      return stats;
     } catch (error) {
-      console.error(`[StatsService] Error calculating category stats for ${category}: ${error.message}`);
+      console.error(`[StatsService] Error calculating category stats: ${error.message}`);
       throw new Error(`Failed to calculate category statistics: ${error.message}`);
     }
   },
@@ -150,14 +316,46 @@ export const statsService = {
   calculateRevenueByPaymentMethod(data) {
     const paymentMethods = [
       'Cash', 'UPI', 'Bank Transfer', 'Hudle App', 
-      'Hudle QR', 'Hudle Wallet', 'Venue Wallet'
+      'Hudle QR', 'Hudle Wallet', 'Venue Wallet',
+      'Hudle Pass', 'Hudle Discount'
     ];
+    
+    // Helper function to safely parse currency values
+    const getCurrencyValueSum = (fieldName) => {
+      return data.reduce((sum, booking) => {
+        const value = booking[fieldName];
+        if (value === undefined || value === null || value === '') return sum;
+        // Remove any currency symbols and commas, then parse
+        const numericValue = parseFloat(String(value).replace(/[₹,]/g, '')) || 0;
+        return sum + numericValue;
+      }, 0);
+    };
     
     const result = {};
     
+    // Calculate individual payment methods
     paymentMethods.forEach(method => {
-      result[method] = dataUtils.sum(data, method);
+      result[method] = getCurrencyValueSum(method);
     });
+    
+    // Add aggregated payment types
+    result.cashTotal = result.Cash || 0;
+    result.bankTotal = (result.UPI || 0) + (result['Bank Transfer'] || 0);
+    result.hudleTotal = (result['Hudle App'] || 0) + 
+                       (result['Hudle QR'] || 0) + 
+                       (result['Hudle Wallet'] || 0) + 
+                       (result['Venue Wallet'] || 0) + 
+                       (result['Hudle Pass'] || 0) + 
+                       (result['Hudle Discount'] || 0);
+    
+    // Calculate total and percentages
+    result.total = result.cashTotal + result.bankTotal + result.hudleTotal;
+    
+    if (result.total > 0) {
+      result.cashPercentage = (result.cashTotal / result.total) * 100;
+      result.bankPercentage = (result.bankTotal / result.total) * 100;
+      result.hudlePercentage = (result.hudleTotal / result.total) * 100;
+    }
     
     return result;
   },
@@ -286,28 +484,69 @@ export const statsService = {
     ];
     
     return months.map(month => {
+      // Get bookings for this month
       const monthData = data.filter(booking => booking.Month === month);
       const year = monthData.length > 0 ? monthData[0].Year : '';
       
-      // Helper function to safely sum values
-      const safeSum = (fieldName) => {
-        return monthData.reduce((sum, booking) => {
-          const value = parseFloat(booking[fieldName]) || 0;
-          return sum + value;
+      // Skip if no data for this month
+      if (monthData.length === 0) {
+        return {
+          month,
+          year,
+          cashAmount: 0,
+          bankAmount: 0,
+          hudleAmount: 0,
+          totalAmount: 0,
+          cashPercentage: 0,
+          bankPercentage: 0,
+          hudlePercentage: 0
+        };
+      }
+      
+      // Helper function to safely parse currency values
+      const getCurrencyValueSum = (fieldName) => {
+        return monthData.reduce((total, booking) => {
+          // Get the value from the booking
+          const value = booking[fieldName];
+          
+          // Skip undefined, null or empty values
+          if (value === undefined || value === null || value === '') {
+            return total;
+          }
+          
+          // Parse the value - remove currency symbols and commas
+          const sanitized = typeof value === 'string' 
+                            ? value.replace(/[₹,]/g, '').trim()
+                            : String(value);
+          
+          // Convert to number and add to total (handle NaN)
+          const numericValue = parseFloat(sanitized);
+          return total + (isNaN(numericValue) ? 0 : numericValue);
         }, 0);
       };
-
-      // Calculate payment amounts with safe summation
-      const cashAmount = safeSum('Cash');
-      const bankAmount = safeSum('UPI') + safeSum('Bank Transfer');
-      const hudleAmount = safeSum('Hudle App') + 
-                         safeSum('Hudle QR') + 
-                         safeSum('Hudle Discount') + 
-                         safeSum('Hudle Pass') + 
-                         safeSum('Venue Wallet') + 
-                         safeSum('Hudle Wallet');
+      
+      // Calculate payment amounts directly
+      const cashAmount = getCurrencyValueSum('Cash');
+      const bankAmount = getCurrencyValueSum('UPI') + getCurrencyValueSum('Bank Transfer');
+      const hudleAmount = getCurrencyValueSum('Hudle App') + 
+                        getCurrencyValueSum('Hudle QR') + 
+                        getCurrencyValueSum('Hudle Wallet') + 
+                        getCurrencyValueSum('Venue Wallet') + 
+                        getCurrencyValueSum('Hudle Pass') + 
+                        getCurrencyValueSum('Hudle Discount');
       
       const totalAmount = cashAmount + bankAmount + hudleAmount;
+      
+      // Verify the direct calculation matches the total paid for this month
+      const totalPaid = dataUtils.sum(monthData, 'Total Paid');
+      
+      // Log verification for debugging (but only if there's data and a significant difference)
+      if (monthData.length > 0 && Math.abs(totalAmount - totalPaid) > 10) {
+        console.warn(`[StatsService] Month ${month} ${year} - Payment calculation discrepancy:`);
+        console.warn(`  Total Paid: ${totalPaid}`);
+        console.warn(`  Sum of Payment Modes: ${totalAmount}`);
+        console.warn(`  Difference: ${Math.abs(totalPaid - totalAmount)}`);
+      }
       
       return {
         month,
@@ -321,6 +560,184 @@ export const statsService = {
         hudlePercentage: totalAmount > 0 ? Math.round((hudleAmount / totalAmount) * 100) : 0
       };
     });
+  },
+
+  /**
+   * Get statistics for a specific location
+   * @param {string} locationId - Location ID
+   * @returns {Object} Location-specific statistics
+   */
+  async getLocationStats(locationId) {
+    try {
+      console.log(`[StatsService] Fetching statistics for location: ${locationId}`);
+      
+      // Check if data is ready globally
+      console.log('[StatsService] Checking if booking data is ready:', window.BOOKINGS_DATA_READY);
+      
+      // If data isn't ready yet, wait a moment and retry up to 3 times
+      let attempts = 0;
+      while (!window.BOOKINGS_DATA_READY && attempts < 3) {
+        console.log(`[StatsService] Data not ready yet, waiting (attempt ${attempts + 1}/3)...`);
+        await new Promise(resolve => setTimeout(resolve, 500)); // Wait 500ms
+        attempts++;
+      }
+      
+      // Debug: Check what's in window.appData
+      console.log('[StatsService] DEBUG - window.appData:', window.appData);
+      console.log('[StatsService] DEBUG - global bookingsData length:', window.appData?.bookingsData?.length);
+      
+      const { bookingsData } = window.appData || {};
+      if (!bookingsData || !bookingsData.length) {
+        console.warn('[StatsService] No data available for location statistics');
+        return null;
+      }
+      
+      // Try to get locations data from imported JSON
+      let locationName = null;
+      let locations = [];
+      
+      try {
+        // Dynamically import the locations data
+        locations = await import('../locations.json').then(module => module.default);
+        console.log(`[StatsService] Loaded ${locations.length} locations from locations.json`);
+        
+        // Find the location name using the provided ID
+        const locationMatch = locations.find(loc => loc.Location_id === locationId);
+        if (locationMatch) {
+          locationName = locationMatch.Location_name;
+          console.log(`[StatsService] Found location name: ${locationName} for ID: ${locationId}`);
+        } else {
+          console.warn(`[StatsService] Could not find location name for ID: ${locationId}`);
+        }
+      } catch (error) {
+        console.error(`[StatsService] Error loading locations: ${error.message}`);
+        // Continue anyway, we'll try matching directly
+      }
+      
+      // Debug: Show a sample booking to check fields
+      if (bookingsData.length > 0) {
+        console.log('[StatsService] DEBUG - First booking record:', bookingsData[0]);
+        console.log('[StatsService] DEBUG - Location field in first booking:', bookingsData[0].Location);
+      }
+      
+      // Filter bookings for this location (try multiple matching strategies)
+      const locationBookings = bookingsData.filter(booking => {
+        // Strategy 1: Match by ID first if the booking has Location_id or LocationID
+        const bookingLocationId = booking.Location_id || booking.LocationID;
+        if (bookingLocationId && bookingLocationId === locationId) {
+          return true;
+        }
+        
+        // Strategy 2: Match by name if we have the location name
+        if (locationName && booking.Location === locationName) {
+          return true;
+        }
+        
+        // Strategy 3: Direct match between location ID and Location field (fallback)
+        if (booking.Location === locationId) {
+          return true;
+        }
+        
+        return false;
+      });
+      
+      if (!locationBookings.length) {
+        console.warn(`[StatsService] No bookings found for location ID: ${locationId} or name: ${locationName}`);
+        
+        // Last resort: Try to match any location with a name that contains part of the ID or vice versa
+        if (locationName) {
+          const fuzzyLocationBookings = bookingsData.filter(booking => {
+            const locationField = booking.Location || '';
+            return locationField.includes(locationName) || locationName.includes(locationField);
+          });
+          
+          if (fuzzyLocationBookings.length > 0) {
+            console.log(`[StatsService] Found ${fuzzyLocationBookings.length} bookings using fuzzy name matching for ${locationName}`);
+            return this.processLocationBookings(fuzzyLocationBookings);
+          }
+        }
+        
+        return null;
+      }
+      
+      console.log(`[StatsService] Processing ${locationBookings.length} bookings for location`);
+      return this.processLocationBookings(locationBookings);
+    } catch (error) {
+      console.error(`[StatsService] Error getting location stats: ${error.message}`);
+      throw new Error(`Failed to get location statistics: ${error.message}`);
+    }
+  },
+  
+  /**
+   * Process filtered location bookings
+   * @param {Array} locationBookings - Array of bookings for a single location
+   * @returns {Object} Processed statistics
+   */
+  processLocationBookings(locationBookings) {
+    // Calculate base statistics
+    const totalCollection = dataUtils.sum(locationBookings, 'Total Paid');
+    
+    // Helper function to safely parse currency values
+    const getCurrencyValueSum = (fieldName) => {
+      return locationBookings.reduce((total, booking) => {
+        const value = booking[fieldName];
+        if (value === undefined || value === null || value === '') return total;
+        const sanitized = typeof value === 'string' 
+                        ? value.replace(/[₹,]/g, '').trim()
+                        : String(value);
+        const numericValue = parseFloat(sanitized);
+        return total + (isNaN(numericValue) ? 0 : numericValue);
+      }, 0);
+    };
+    
+    // Calculate payment amounts
+    const cashAmount = getCurrencyValueSum('Cash');
+    const bankAmount = getCurrencyValueSum('UPI') + getCurrencyValueSum('Bank Transfer');
+    const hudleAmount = getCurrencyValueSum('Hudle App') + 
+                      getCurrencyValueSum('Hudle QR') + 
+                      getCurrencyValueSum('Hudle Wallet') + 
+                      getCurrencyValueSum('Venue Wallet') + 
+                      getCurrencyValueSum('Hudle Pass') + 
+                      getCurrencyValueSum('Hudle Discount');
+    
+    const totalPayments = cashAmount + bankAmount + hudleAmount;
+    
+    // Time distribution
+    const timeDistribution = this.calculateTimeDistribution(locationBookings);
+    
+    // Top customers
+    const topCustomers = this.calculateTopCustomers(locationBookings, 'revenue', 3);
+    
+    // Format the stats object
+    const stats = {
+      totalBookings: locationBookings.length,
+      totalCollection,
+      totalOutstanding: dataUtils.sum(locationBookings, 'Balance'),
+      uniqueCustomers: new Set(locationBookings.map(b => b.Phone)).size,
+      totalSlots: dataUtils.sum(locationBookings, 'Number of slots'),
+      avgBookingValue: locationBookings.length ? totalCollection / locationBookings.length : 0,
+      avgSlotsPerBooking: locationBookings.length ? 
+        dataUtils.sum(locationBookings, 'Number of slots') / locationBookings.length : 0,
+      completionRate: this.calculateCompletionRate(locationBookings),
+      onlineBookingPercentage: locationBookings.length ? 
+        (locationBookings.filter(b => b.Source?.toLowerCase() === 'online').length / locationBookings.length) * 100 : 0,
+      
+      // Payment methods
+      cashAmount,
+      bankAmount,
+      hudleAmount,
+      cashPercentage: totalPayments > 0 ? (cashAmount / totalPayments) * 100 : 0,
+      bankPercentage: totalPayments > 0 ? (bankAmount / totalPayments) * 100 : 0,
+      hudlePercentage: totalPayments > 0 ? (hudleAmount / totalPayments) * 100 : 0,
+      
+      // Time distribution
+      timeDistribution,
+      
+      // Top customers
+      topCustomers
+    };
+    
+    return stats;
   }
 };
 

@@ -69,7 +69,21 @@ export const dataUtils = {
       try {
         return data.reduce((sum, item) => {
           const value = item[field];
-          // Handle undefined, null, or NaN values
+          
+          // Skip undefined or null values
+          if (value === undefined || value === null || value === '') {
+            return sum;
+          }
+          
+          // Handle currency strings (remove ₹ and commas)
+          if (typeof value === 'string') {
+            // Replace currency symbols and commas
+            const sanitized = value.replace(/[₹,]/g, '').trim();
+            const parsed = parseFloat(sanitized);
+            return sum + (isNaN(parsed) ? 0 : parsed);
+          }
+          
+          // Handle numeric values
           const numValue = typeof value === 'number' ? value : Number(value);
           return sum + (isNaN(numValue) ? 0 : numValue);
         }, 0);

@@ -5,6 +5,7 @@ import { useErrorTracker } from './useErrorTracker';
 import { dataService } from '../services/dataService';
 import { filterService } from '../services/filterService';
 import { sortService } from '../services/sortService';
+import { groupingService } from '../services/groupingService';
 import { ErrorSeverity, ErrorCategory } from '../utils/errorTypes';
 
 /**
@@ -14,6 +15,7 @@ import { ErrorSeverity, ErrorCategory } from '../utils/errorTypes';
 export const useBookings = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [groupedData, setGroupedData] = useState({});
   const { trackError } = useErrorTracker();
   const { session } = useAuth();
   
@@ -22,6 +24,77 @@ export const useBookings = () => {
     activeFilters, selectedYear, setBookingsData, 
     setFilteredData, batchUpdate, setIsLoading: setAppLoading
   } = useApp();
+
+  /**
+   * Group data based on specified parameter
+   * @param {string} groupBy - Parameter to group by
+   * @param {Array} data - Data to group (optional)
+   */
+  const groupData = useCallback((groupBy, data = filteredData) => {
+    if (!data?.length) return;
+
+    try {
+      let grouped;
+      // Normalize groupBy to handle both singular and plural forms
+      // But with special handling for terms like 'status' that shouldn't be modified
+      let normalizedGroupBy = groupBy;
+      
+      // Special cases that shouldn't be normalized
+      const specialCases = ['status'];
+      
+      if (!specialCases.includes(groupBy)) {
+        normalizedGroupBy = groupBy.replace(/s$/, '');
+      }
+      
+      console.log(`[useBookings] Grouping data by: ${normalizedGroupBy} (original: ${groupBy})`);
+      
+      switch (normalizedGroupBy) {
+        case 'date':
+          grouped = groupingService.groupByDate(data, 'day');
+          break;
+        case 'month':
+          grouped = groupingService.groupByDate(data, 'month');
+          break;
+        case 'year':
+          grouped = groupingService.groupByDate(data, 'year');
+          break;
+        case 'location':
+          grouped = groupingService.groupByLocation(data);
+          break;
+        case 'source':
+          grouped = groupingService.groupBySource(data);
+          break;
+        case 'sport':
+          grouped = groupingService.groupBySport(data);
+          break;
+        case 'status':
+          grouped = groupingService.groupByStatus(data);
+          break;
+        case 'payment':
+          grouped = groupingService.groupByPaymentMode(data);
+          break;
+        default:
+          console.warn(`[useBookings] Unknown grouping parameter: ${groupBy}`);
+          return;
+      }
+      
+      // Store the result using the original groupBy parameter
+      // This ensures we don't overwrite previously grouped data for other types
+      setGroupedData(prev => ({
+        ...prev,
+        [groupBy]: grouped
+      }));
+    } catch (error) {
+      console.error('[useBookings] Error grouping data:', error);
+      trackError(
+        error,
+        'useBookings.groupData',
+        ErrorSeverity.ERROR,
+        ErrorCategory.DATA,
+        { groupBy }
+      );
+    }
+  }, [filteredData, trackError]);
 
   /**
    * Load bookings for selected year
@@ -92,6 +165,15 @@ export const useBookings = () => {
         );
       }
       
+      // Group data by different parameters
+      console.log('[useBookings] Grouping data by all required categories');
+      groupData('locations', processedData);
+      groupData('months', processedData);
+      groupData('sports', processedData);
+      groupData('status', processedData);
+      groupData('source', processedData);
+      groupData('payment', processedData);
+      
       // Update state
       batchUpdate({
         bookingsData: data,
@@ -129,7 +211,8 @@ export const useBookings = () => {
     activeFilters, 
     sortField, 
     sortDirection,
-    batchUpdate
+    batchUpdate,
+    groupData
   ]);
   
   /**
@@ -158,6 +241,15 @@ export const useBookings = () => {
         ? sortService.sortData(newFilteredData, sortField, sortDirection)
         : newFilteredData;
       
+      // Group the filtered data
+      console.log('[useBookings] Regrouping data after applying filter');
+      groupData('locations', sortedData);
+      groupData('months', sortedData);
+      groupData('sports', sortedData);
+      groupData('status', sortedData);
+      groupData('source', sortedData);
+      groupData('payment', sortedData);
+      
       // Update state
       batchUpdate({
         filteredData: sortedData,
@@ -175,7 +267,7 @@ export const useBookings = () => {
         { filterType, filterValue }
       );
     }
-  }, [bookingsData, sortField, sortDirection, batchUpdate, trackError]);
+  }, [bookingsData, sortField, sortDirection, batchUpdate, trackError, groupData]);
   
   /**
    * Clear all filters
@@ -283,12 +375,14 @@ export const useBookings = () => {
   return {
     bookingsData,
     filteredData,
+    groupedData,
     isLoading,
     error,
     loadBookings,
     applyFilter,
     clearFilters,
     applySorting,
-    refreshData
+    refreshData,
+    groupData
   };
 }

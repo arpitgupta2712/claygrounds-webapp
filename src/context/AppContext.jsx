@@ -1,4 +1,4 @@
-import { createContext, useState, useContext, useReducer, useCallback } from 'react';
+import { createContext, useState, useContext, useReducer, useCallback, useEffect } from 'react';
 import { useErrorTracker } from '../hooks/useErrorTracker';
 import { ErrorSeverity, ErrorCategory } from '../utils/errorTypes';
 import { CONSTANTS, ViewTypes, FilterTypes } from '../utils/constants';
@@ -283,6 +283,27 @@ export function AppProvider({ children }) {
     }
   }, [trackError]);
   
+  // Initialization flag
+  window.BOOKINGS_DATA_READY = window.BOOKINGS_DATA_READY || false;
+  
+  // Make data available globally for services
+  useEffect(() => {
+    // Create a globally accessible object for application data
+    window.appData = window.appData || {};
+    
+    // Only update if we have actual data
+    if (state.bookingsData && state.bookingsData.length > 0) {
+      console.log(`[AppContext] Making ${state.bookingsData.length} bookings available globally via window.appData`);
+      window.appData.bookingsData = state.bookingsData;
+      window.appData.filteredData = state.filteredData;
+      window.appData.selectedYear = state.selectedYear;
+      window.BOOKINGS_DATA_READY = true;
+    } else {
+      console.log('[AppContext] No bookings data to make available globally');
+      window.BOOKINGS_DATA_READY = false;
+    }
+  }, [state.bookingsData, state.filteredData, state.selectedYear]);
+  
   // Value object
   const value = {
     // State
@@ -304,7 +325,7 @@ export function AppProvider({ children }) {
     // Constants
     CONSTANTS,
     ViewTypes,
-    FilterTypes
+    FilterTypes,
   };
   
   return (

@@ -6,6 +6,7 @@ import LoginPage from './components/auth/LoginPage';
 import Dashboard from './components/dashboard/Dashboard';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import ErrorBoundary from './components/common/ErrorBoundary';
+import VisualizationsPage from './pages/VisualizationsPage';
 
 function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -37,6 +38,7 @@ function App() {
                   <Dashboard />
                 </ProtectedRoute>
               } />
+              <Route path="/visualizations" element={<VisualizationsPage />} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
           </Router>

@@ -55,35 +55,29 @@ function Navigation({ onViewChange }) {
     lastProcessedPathRef.current = location.pathname;
     
     // Extract the relevant part of the path
-    const pathSegment = location.pathname.split('/').pop();
+    const pathSegment = location.pathname.split('/').filter(Boolean).pop();
     
     // Lookup the view type for this path
-    const viewForPath = PATH_TO_VIEW[pathSegment] || ViewTypes.TABLE;
+    const viewForPath = PATH_TO_VIEW[pathSegment];
     
-    // If this is the first path we're processing, just record it without triggering callbacks
-    if (!initialPathProcessedRef.current) {
+    // If no view found for path, default to table view
+    const newView = viewForPath || ViewTypes.TABLE;
+    
+    // Always update the view on initial load or when it changes
+    if (!initialPathProcessedRef.current || newView !== currentView) {
+      console.log(`[Navigation] ${initialPathProcessedRef.current ? 'Path changed' : 'Initial path'} - setting view to ${newView}`);
+      setCurrentView(newView);
+      
+      // Notify parent of the change if this isn't the initial load
+      if (initialPathProcessedRef.current && onViewChange && typeof onViewChange === 'function') {
+        console.log(`[Navigation] Notifying parent of view change to ${newView}`);
+        onViewChange(newView);
+      }
+      
+      // Mark initial path as processed
       initialPathProcessedRef.current = true;
-      
-      // Only update the view if it's different
-      if (viewForPath !== currentView) {
-        console.log(`[Navigation] Initial path - setting view to ${viewForPath}`);
-        setCurrentView(viewForPath);
-      }
-      return;
     }
-    
-    // For subsequent path changes, update view if different and notify parent
-    if (viewForPath !== currentView) {
-      console.log(`[Navigation] Path changed - setting view to ${viewForPath}`);
-      setCurrentView(viewForPath);
-      
-      // Notify parent of the change
-      if (onViewChange && typeof onViewChange === 'function') {
-        console.log(`[Navigation] Notifying parent of view change to ${viewForPath}`);
-        onViewChange(viewForPath);
-      }
-    }
-  }, [location.pathname]); // Only depend on pathname changes
+  }, [location.pathname, currentView, setCurrentView, onViewChange]);
 
   // Close dropdowns when clicking outside
   useEffect(() => {

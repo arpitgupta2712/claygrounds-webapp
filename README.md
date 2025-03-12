@@ -1,7 +1,7 @@
-# ClayGrounds - Sports Facility Booking Management System
+# ClayGrounds - Sports Location Booking Management System
 
 ## Overview
-ClayGrounds is a comprehensive booking management system designed for sports facilities and recreational venues. The application helps facility managers track, organize, and analyze bookings across different locations, sports types, time periods, and booking sources. With an intuitive dashboard and versatile data visualization options, ClayGrounds simplifies the management of complex booking data.
+ClayGrounds is a comprehensive booking management system designed for sports locations and recreational venues. The application helps location managers track, organize, and analyze bookings across different locations, sports types, time periods, and booking sources. With an intuitive dashboard and versatile data visualization options, ClayGrounds simplifies the management of complex booking data with support for financial year-based reporting.
 
 ## Key Features
 
@@ -12,7 +12,8 @@ ClayGrounds is a comprehensive booking management system designed for sports fac
 
 ### Dashboard
 - Central control center providing quick access to all views
-- Real-time statistics and performance metrics
+- Real-time statistics and performance metrics by location
+- Financial year-based data organization (e.g., 2024-25)
 - Customizable view options for different data perspectives
 
 ### Data Visualization & Analysis
@@ -20,13 +21,27 @@ ClayGrounds is a comprehensive booking management system designed for sports fac
   - Table View: Complete booking listings with sorting and filtering
   - Category Views: Data segmentation by location, month, sport, status, and source
   - Summary Views: Aggregated statistics and performance metrics
+  - Financial Reports: Year-wise and month-wise booking analysis
 - **Interactive Charts**: Visual representation of booking trends and patterns
-- **PDF Reporting**: Export capabilities using jsPDF and jsPDF-autotable
+- **PDF Reporting**: 
+  - Comprehensive PDF exports using jsPDF and jsPDF-autotable
+  - Location-wise booking reports
+  - Financial year-based statistics
+  - Monthly revenue analysis
+  - Custom date range reports
 
-### Facility Management
-- Facility creation and management (17 locations currently configured)
+### Location Management
+- Location-based organization system (17 locations currently configured)
 - Performance tracking across multiple venues
-- Comparative analysis between facilities
+- Comparative analysis between locations
+- Location-specific reporting and statistics
+
+### Financial Management
+- Financial year-based data organization
+- Monthly revenue tracking
+- Date-wise booking analysis
+- Custom date range filtering
+- Advanced financial reporting capabilities
 
 ### Responsive Design
 - Mobile-first approach with optimized layouts for all devices
@@ -42,7 +57,17 @@ ClayGrounds is a comprehensive booking management system designed for sports fac
 
 ### State Management
 - **React Context API**: Global state management via AuthContext and AppContext
-- **Custom Hooks**: Specialized hooks for bookings, filters, and error handling
+- **Custom Hooks**: 
+  - useBookings: Booking data management
+  - useFilters: Advanced filtering system
+  - useErrorTracker: Error handling and logging
+  - useToast: Notification system
+
+### Data Processing
+- **Date Handling**: Custom date utilities for DD/MM/YYYY format
+- **Financial Year Logic**: Specialized processing for financial year data
+- **Data Aggregation**: Advanced statistics calculation
+- **PDF Generation**: Custom PDF layout and generation system
 
 ### Styling & UI
 - **Tailwind CSS**: Utility-first CSS framework with custom theme configuration
@@ -64,40 +89,31 @@ ClayGrounds is a comprehensive booking management system designed for sports fac
 claygrounds-webapp/
 │
 ├── public/                # Static assets
+│   └── mock-data/        # Sample CSV data files
 │
 ├── src/
-│   ├── components/        # UI components
-│   │   ├── auth/          # Authentication components
-│   │   │   ├── LoginPage.jsx
-│   │   │   └── ProtectedRoute.jsx
-│   │   ├── common/        # Shared components
-│   │   │   └── ErrorBoundary.jsx
-│   │   ├── dashboard/     # Dashboard components
-│   │   │   └── Dashboard.jsx
-│   │   ├── category/      # Category-based views
-│   │   ├── summary/       # Data summary components
-│   │   └── table/         # Table view components
+│   ├── components/       
+│   │   ├── auth/         # Authentication components
+│   │   ├── common/       # Shared components
+│   │   ├── dashboard/    # Dashboard and navigation
+│   │   ├── category/     # Category-based views
+│   │   ├── payments/     # Payment analysis views
+│   │   ├── report/       # PDF report generation
+│   │   ├── summary/      # Statistics components
+│   │   └── table/        # Data table components
 │   │
-│   ├── context/           # React Context providers
-│   │   ├── AuthContext.jsx  # User authentication context
-│   │   └── AppContext.jsx   # Application state context
+│   ├── context/          # React Context providers
+│   ├── hooks/            # Custom React hooks
+│   ├── services/         # API and data services
+│   ├── utils/            # Utility functions
+│   │   ├── dateUtils.js  # Date handling
+│   │   ├── formatUtils.js # Data formatting
+│   │   └── constants.js  # Application constants
 │   │
-│   ├── hooks/             # Custom React hooks
-│   ├── services/          # API and data services
-│   ├── utils/             # Utility functions
-│   │
-│   ├── App.jsx            # Main application component
-│   ├── main.jsx           # Application entry point
-│   └── index.css          # Global styles and Tailwind imports
+│   ├── locations.json    # Location configuration
+│   └── main.jsx         # Application entry
 │
-├── configuration files    # Various config files for build tools
-│   ├── vite.config.js     # Vite configuration
-│   ├── tailwind.config.js # Tailwind CSS configuration
-│   ├── eslint.config.js   # ESLint rules
-│   ├── postcss.config.js  # PostCSS plugins
-│   └── netlify.toml       # Netlify deployment settings
-│
-└── package.json          # Dependencies and scripts
+└── configuration files   # Build and deployment configs
 ```
 
 ## Architecture
@@ -105,29 +121,44 @@ claygrounds-webapp/
 ### Application Flow
 1. **Authentication**: Users log in via Supabase auth system
 2. **Route Protection**: ProtectedRoute component ensures authenticated access
-3. **Data Fetching**: Services layer manages API interactions with Supabase
+3. **Data Processing**: 
+   - CSV data parsing and validation
+   - Financial year categorization
+   - Date format standardization (DD/MM/YYYY)
 4. **State Management**: Context providers distribute data to components
-5. **Rendering**: Component hierarchy renders appropriate views
-6. **Interaction**: User actions trigger state updates and re-renders
+5. **View Generation**: 
+   - Location-based filtering
+   - Financial year organization
+   - PDF report generation
+6. **User Interaction**: Real-time updates and filtering
 
 ### Component Design Patterns
 - **Composition**: Components are composed of smaller, reusable parts
 - **Container/Presentation**: Logic separation between data handling and UI rendering
-- **Render Props**: Flexible component customization where needed
-- **Error Boundaries**: Graceful failure handling via ErrorBoundary component
+- **Custom Hooks**: Specialized hooks for business logic
+- **Error Boundaries**: Graceful failure handling with error tracking
+- **Toast Notifications**: User feedback system
+
+### Data Flow
+- **Input Processing**: CSV data validation and parsing
+- **Date Handling**: Standardized DD/MM/YYYY format
+- **Financial Logic**: Year categorization and calculations
+- **Location Management**: Centralized location configuration
+- **Report Generation**: PDF creation and formatting
 
 ### CSS Architecture
-- **Theme Configuration**: Custom color palette defined in tailwind.config.js
-- **Responsive Design**: Mobile-first approach with defined breakpoints
-- **Design Tokens**: Consistent use of colors, spacing, and typography
-- **Custom Animations**: Defined animation keyframes for enhanced UX
-- **Extended Utilities**: Additional Tailwind utilities for project-specific needs
+- **Theme Configuration**: Custom color palette and typography
+- **Responsive Design**: Mobile-first approach
+- **Component-Specific Styles**: Modular CSS organization
+- **Custom Animations**: Enhanced user interactions
+- **Print Styles**: PDF-optimized layouts
 
 ## Setup & Development
 
 ### Prerequisites
-- Node.js (v14.x or higher)
-- npm (v6.x or higher)
+- Node.js (v16.x or higher)
+- npm (v8.x or higher)
+- Git for version control
 
 ### Installation
 1. Clone the repository
@@ -141,18 +172,18 @@ claygrounds-webapp/
    npm install
    ```
 
-3. Start the development server
+3. Configure environment variables
+   Create a `.env` file with required variables (see Environment Variables section)
+
+4. Start the development server
    ```
    npm run dev
    ```
-
-4. The application will be available at http://localhost:3000
 
 ### Building for Production
 ```
 npm run build
 ```
-This creates a production-ready build in the `dist` directory.
 
 ### Preview Production Build
 ```
@@ -161,30 +192,101 @@ npm run preview
 
 ## Environment Variables
 
-The application requires the following environment variables:
+Create a `.env` file with these variables:
 
+```
+VITE_SUPABASE_URL=your_supabase_project_url
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+VITE_APP_VERSION=1.0.0
+VITE_FINANCIAL_YEAR=2024-25
+```
+
+### Required Variables
 - `VITE_SUPABASE_URL`: Supabase project URL
 - `VITE_SUPABASE_ANON_KEY`: Supabase anonymous API key
+- `VITE_APP_VERSION`: Current application version
+- `VITE_FINANCIAL_YEAR`: Current financial year for data processing
 
 ## Deployment
 
-The application is configured for seamless deployment to Netlify:
+The application is configured for deployment on Netlify:
 
-1. **Build Command**: `npm run build`
-2. **Publish Directory**: `dist`
-3. **Custom Headers**: Security headers are pre-configured in netlify.toml
-4. **Redirects**: SPA routing handled via custom redirects
+### Netlify Configuration
+1. **Build Settings**:
+   - Build Command: `npm run build`
+   - Publish Directory: `dist`
+   - Node Version: 16.x
+
+2. **Environment Variables**:
+   - Configure all required environment variables in Netlify dashboard
+   - Ensure financial year settings are correctly set
+
+3. **Security Headers**:
+   ```toml
+   [[headers]]
+     for = "/*"
+     [headers.values]
+       X-Frame-Options = "DENY"
+       X-XSS-Protection = "1; mode=block"
+       X-Content-Type-Options = "nosniff"
+   ```
+
+4. **Redirects**:
+   ```toml
+   [[redirects]]
+     from = "/*"
+     to = "/index.html"
+     status = 200
+   ```
+
+### Deployment Process
+1. Push changes to the main branch
+2. Netlify automatically triggers build
+3. Build process includes:
+   - Environment variable validation
+   - Dependency installation
+   - Build compilation
+   - Asset optimization
+4. Deployment to production URL
 
 ## Contributing
 
-Contributions are welcome! Please follow these steps:
+### Development Guidelines
+1. **Code Style**:
+   - Follow ESLint configuration
+   - Use Prettier for formatting
+   - Follow component naming conventions
 
+2. **Git Workflow**:
+   - Create feature branches from main
+   - Use conventional commits
+   - Keep commits focused and atomic
+
+3. **Testing**:
+   - Test new features thoroughly
+   - Verify PDF generation
+   - Check responsive layouts
+   - Validate date handling
+
+### Contribution Process
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+3. Make your changes
+4. Run tests and linting
+5. Commit your changes (`git commit -m 'Add some amazing feature'`)
+6. Push to your fork (`git push origin feature/amazing-feature`)
+7. Open a Pull Request
+
+### Pull Request Guidelines
+- Provide clear description of changes
+- Include screenshots for UI changes
+- List any new dependencies
+- Update documentation as needed
 
 ## License
 
 This project is licensed under the MIT License.
+
+## Support
+
+For support, please contact the development team or raise an issue in the repository.

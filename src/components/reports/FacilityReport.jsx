@@ -151,7 +151,7 @@ function generatePDF(stats, facilityName, year) {
   const fontsInitialized = initFonts(doc);
   const fontFamily = fontsInitialized ? 'PT Sans' : 'helvetica';
   
-  console.log(`[ReportView] Generating PDF with font "${fontFamily}" (fonts initialized: ${fontsInitialized})`);
+  console.log(`[FacilityReport] Generating PDF with font "${fontFamily}" (fonts initialized: ${fontsInitialized})`);
   
   // Theme colors (matching Tailwind theme exactly)
   const theme = {
@@ -239,7 +239,7 @@ function generatePDF(stats, facilityName, year) {
   try {
     doc.addImage(ASSETS.LOGO, 'PNG', 20, 10, 20, 20, undefined, 'FAST');
   } catch (error) {
-    console.warn('[ReportView] Failed to add logo:', error);
+    console.warn('[FacilityReport] Failed to add logo:', error);
     // Fallback to circle if image fails
     doc.setFillColor(theme.primary.default[0], theme.primary.default[1], theme.primary.default[2]);
     doc.circle(30, 20, 10, 'F');
@@ -662,16 +662,16 @@ function generatePDF(stats, facilityName, year) {
   const fileName = `${facilityName.toLowerCase().replace(/\s+/g, '-')}-report-${year}.pdf`;
   doc.save(fileName);
   
-  console.log(`[ReportView] PDF generated and saved as ${fileName}`);
+  console.log(`[FacilityReport] PDF generated and saved as ${fileName}`);
 }
 
 /**
- * ReportView component for displaying location-specific statistics
+ * LocationReport component for displaying location-specific statistics and reports
  *
- * @param {string} props.facilityId The location ID to display statistics for
- * @param {string} props.facilityName The location name to display
+ * @param {string} props.locationId The location ID to display statistics for
+ * @param {string} props.locationName The location name to display
  */
-function ReportView({ facilityId, facilityName }) {
+function LocationReport({ locationId, locationName }) {
   const { selectedYear, bookingsData, isLoading } = useApp();
   const { trackError } = useErrorTracker();
   const [locationData, setLocationData] = useState([]);
@@ -680,35 +680,35 @@ function ReportView({ facilityId, facilityName }) {
 
   // Filter bookings for the selected location
   useEffect(() => {
-    if (!bookingsData || !facilityId) return;
+    if (!bookingsData || !locationId) return;
 
     try {
-      console.log(`[ReportView] Filtering data for location: ${facilityName} (${facilityId})`);
+      console.log(`[LocationReport] Filtering data for location: ${locationName} (${locationId})`);
       
       // Filter bookings for this location
       const filteredData = bookingsData.filter(booking => 
-        booking.Location === facilityName
+        booking.Location === locationName
       );
       
       setLocationData(filteredData);
-      console.log(`[ReportView] Filtered ${filteredData.length} bookings for location`);
+      console.log(`[LocationReport] Filtered ${filteredData.length} bookings for location`);
     } catch (error) {
-      console.error('[ReportView] Error filtering location data:', error);
+      console.error('[LocationReport] Error filtering location data:', error);
       trackError(
         error,
-        'ReportView.filterLocationData',
+        'LocationReport.filterLocationData',
         ErrorSeverity.ERROR,
         ErrorCategory.DATA
       );
     }
-  }, [bookingsData, facilityId, facilityName, trackError]);
+  }, [bookingsData, locationId, locationName, trackError]);
 
   // Calculate statistics for the location
   useEffect(() => {
     if (!locationData.length) return;
 
     try {
-      console.log(`[ReportView] Calculating statistics for ${facilityName}`);
+      console.log(`[LocationReport] Calculating statistics for ${locationName}`);
       
       // Calculate basic statistics
       const stats = {
@@ -765,35 +765,35 @@ function ReportView({ facilityId, facilityName }) {
       stats.monthlyPayments = statsService.calculateMonthlyPayments(locationData);
       
       setLocationStats(stats);
-      console.log('[ReportView] Location statistics calculated:', stats);
+      console.log('[LocationReport] Location statistics calculated:', stats);
     } catch (error) {
-      console.error('[ReportView] Error calculating location statistics:', error);
+      console.error('[LocationReport] Error calculating location statistics:', error);
       trackError(
         error,
-        'ReportView.calculateLocationStats',
+        'LocationReport.calculateLocationStats',
         ErrorSeverity.ERROR,
         ErrorCategory.DATA
       );
     }
-  }, [locationData, facilityName, trackError]);
+  }, [locationData, locationName, trackError]);
 
   // Function to handle report export
   const handleExport = (format = 'txt') => {
     if (!locationStats) return;
     
     if (format === 'txt') {
-      const reportText = generateReport(locationStats, facilityName, selectedYear);
+      const reportText = generateReport(locationStats, locationName, selectedYear);
       const blob = new Blob([reportText], { type: 'text/plain' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `${facilityName.toLowerCase().replace(/\s+/g, '-')}-report-${selectedYear}.txt`;
+      link.download = `${locationName.toLowerCase().replace(/\s+/g, '-')}-report-${selectedYear}.txt`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
     } else if (format === 'pdf') {
-      generatePDF(locationStats, facilityName, selectedYear);
+      generatePDF(locationStats, locationName, selectedYear);
     }
     
     setShowExportDropdown(false);
@@ -801,7 +801,7 @@ function ReportView({ facilityId, facilityName }) {
 
   // Show loading state
   if (isLoading) {
-    return <Loading message={`Loading data for ${facilityName}...`} />;
+    return <Loading message={`Loading data for ${locationName}...`} />;
   }
 
   // Show empty state if no data
@@ -809,7 +809,7 @@ function ReportView({ facilityId, facilityName }) {
     return (
       <EmptyState
         title="No Data Available"
-        message={`There is no booking data available for ${facilityName} in the selected year.`}
+        message={`There is no booking data available for ${locationName} in the selected year.`}
         icon="empty"
       />
     );
@@ -819,7 +819,7 @@ function ReportView({ facilityId, facilityName }) {
     <div className="animate-fadeIn">
       <div className="mb-6 flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-primary mb-2">{facilityName} Statistics</h2>
+          <h2 className="text-2xl font-bold text-primary mb-2">{locationName} Statistics</h2>
           <p className="text-text-light">
             Year: {selectedYear.substring(0, 4)}-{selectedYear.substring(4, 6)} • 
             {locationData.length} bookings
@@ -988,7 +988,7 @@ function ReportView({ facilityId, facilityName }) {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {locationStats.monthlyPayments.map((monthData, index) => (
                     <tr key={monthData.month} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                      <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-bold text-primary">
+                      <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-bold uppercase text-primary">
                         {monthData.month}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-900">
@@ -1030,7 +1030,7 @@ function ReportView({ facilityId, facilityName }) {
                       ₹{dataUtils.formatNumber(locationStats.hudleAmount)}
                       <span className="text-gray-500 text-xs ml-1">({locationStats.hudlePercentage.toFixed(1)}%)</span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-base font-bold text-primary">
+                    <td className="px-6 py-4 whitespace-nowrap text-base text-center font-bold text-primary">
                       ₹{dataUtils.formatNumber(locationStats.totalCollection)}
                     </td>
                   </tr>
@@ -1060,9 +1060,9 @@ function ReportView({ facilityId, facilityName }) {
   );
 }
 
-ReportView.propTypes = {
-  facilityId: PropTypes.string.isRequired,
-  facilityName: PropTypes.string.isRequired
+LocationReport.propTypes = {
+  locationId: PropTypes.string.isRequired,
+  locationName: PropTypes.string.isRequired
 };
 
-export default ReportView;
+export default LocationReport;

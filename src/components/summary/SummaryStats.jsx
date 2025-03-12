@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { useBookings } from '../../hooks/useBookings';
 import { useErrorTracker } from '../../hooks/useErrorTracker';
 import { statsService } from '../../services/statsService';
 import { ErrorSeverity, ErrorCategory } from '../../utils/errorTypes';
@@ -13,6 +14,7 @@ function SummaryStats() {
   const [stats, setStats] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const { filteredData } = useApp();
+  const { groupedData, groupData } = useBookings();
   const { trackError } = useErrorTracker();
 
   // Calculate statistics when data changes
@@ -26,6 +28,14 @@ function SummaryStats() {
     
     try {
       console.log('[SummaryStats] Calculating summary statistics');
+      
+      // Ensure we have all required groupings
+      groupData('month');
+      groupData('location');
+      groupData('status');
+      groupData('payment');
+      groupData('source');
+      
       const calculatedStats = statsService.calculateSummaryStats(filteredData);
       setStats(calculatedStats);
     } catch (error) {
@@ -39,11 +49,11 @@ function SummaryStats() {
     } finally {
       setIsLoading(false);
     }
-  }, [filteredData, trackError]);
+  }, [filteredData, trackError, groupData]);
 
   // If loading, show loading indicator
   if (isLoading) {
-    return <Loading size="sm" message="" className="my-6" />;
+    return <Loading size="sm" message="Calculating statistics..." className="my-6" />;
   }
 
   // If no stats or data, don't render anything
@@ -52,45 +62,122 @@ function SummaryStats() {
   }
 
   return (
-    <div className="my-6 md:my-10">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6 gap-4 md:gap-6">
-        <StatsCard 
-          title="Total Bookings" 
-          value={stats.totalBookings} 
+    <div className="grid gap-6">
+      {/* Overview Section */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatsCard
+          title="Total Bookings"
+          value={stats.totalBookings}
           type="number"
         />
-        
-        <StatsCard 
-          title="Total Slots" 
-          value={stats.totalSlots} 
-          type="number"
-        />
-        
-        <StatsCard 
-          title="Completion Rate" 
-          value={stats.completionRate} 
-          type="percentage"
-          colorClass={stats.completionRate > 80 ? "text-success" : stats.completionRate > 50 ? "text-warning" : "text-error"}
-        />
-        
-        <StatsCard 
-          title="Total Collection" 
-          value={stats.totalCollection} 
+        <StatsCard
+          title="Total Revenue"
+          value={stats.totalCollection}
           type="currency"
         />
-        
-        <StatsCard 
-          title="Outstanding Balance" 
-          value={stats.totalBalance} 
-          type="currency"
-          colorClass={stats.totalBalance > 0 ? "text-error" : "text-text-dark"}
-        />
-        
-        <StatsCard 
-          title="Unique Customers" 
-          value={stats.uniqueCustomers} 
+        <StatsCard
+          title="Total Slots"
+          value={stats.totalSlots}
           type="number"
         />
+        <StatsCard
+          title="Unique Customers"
+          value={stats.uniqueCustomers}
+          type="number"
+        />
+      </div>
+
+      {/* Status Distribution */}
+      <div className="bg-white p-6 rounded-lg shadow">
+        <h3 className="text-lg font-semibold mb-4">Booking Status</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <StatsCard
+            title="Confirmed"
+            value={stats.statusStats.confirmed}
+            subValue={`${Math.round(stats.statusStats.confirmationRate)}%`}
+            type="number"
+          />
+          <StatsCard
+            title="Cancelled"
+            value={stats.statusStats.cancelled}
+            type="number"
+          />
+          <StatsCard
+            title="Partially Cancelled"
+            value={stats.statusStats.partially_cancelled}
+            type="number"
+          />
+        </div>
+      </div>
+
+      {/* Payment Distribution */}
+      <div className="bg-white p-6 rounded-lg shadow">
+        <h3 className="text-lg font-semibold mb-4">Payment Methods</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <StatsCard
+            title="Cash Payments"
+            value={stats.paymentStats.cash.amount}
+            subValue={`${Math.round(stats.paymentStats.cash.percentage)}%`}
+            type="currency"
+          />
+          <StatsCard
+            title="Bank Transfers"
+            value={stats.paymentStats.bank.amount}
+            subValue={`${Math.round(stats.paymentStats.bank.percentage)}%`}
+            type="currency"
+          />
+          <StatsCard
+            title="Hudle Payments"
+            value={stats.paymentStats.hudle.amount}
+            subValue={`${Math.round(stats.paymentStats.hudle.percentage)}%`}
+            type="currency"
+          />
+        </div>
+      </div>
+
+      {/* Booking Source */}
+      <div className="bg-white p-6 rounded-lg shadow">
+        <h3 className="text-lg font-semibold mb-4">Booking Source</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <StatsCard
+            title="Online Bookings"
+            value={stats.sourceStats.online}
+            subValue={`${Math.round(stats.sourceStats.onlinePercentage)}%`}
+            type="number"
+          />
+          <StatsCard
+            title="Offline Bookings"
+            value={stats.sourceStats.offline}
+            subValue={`${Math.round(100 - stats.sourceStats.onlinePercentage)}%`}
+            type="number"
+          />
+        </div>
+      </div>
+
+      {/* Monthly Stats */}
+      <div className="bg-white p-6 rounded-lg shadow">
+        <h3 className="text-lg font-semibold mb-4">Monthly Performance</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {stats.monthlyStats.map(month => (
+            <div key={month.month} className="bg-gray-50 p-4 rounded">
+              <h4 className="font-semibold text-primary">{month.month}</h4>
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                <StatsCard
+                  title="Bookings"
+                  value={month.bookings}
+                  type="number"
+                  size="sm"
+                />
+                <StatsCard
+                  title="Revenue"
+                  value={month.revenue}
+                  type="currency"
+                  size="sm"
+                />
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

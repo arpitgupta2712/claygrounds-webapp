@@ -10,6 +10,7 @@ import { useErrorTracker } from '../../hooks/useErrorTracker';
 import { ErrorSeverity, ErrorCategory } from '../../utils/errorTypes';
 import ScrollToTop from '../common/ScrollToTop';
 import locations from '../../locations.json';
+import LocationReport from '../reports/LocationReport';
 
 // Components
 import Header from './Header';
@@ -17,7 +18,6 @@ import Navigation from './Navigation';
 import FilterControls from './FilterControls';
 import TableView from '../table/TableView';
 import CategoryView from '../category/CategoryView';
-import ReportView from '../report/ReportView';
 import PaymentsView from '../payments/PaymentsView';
 import Loading from '../common/Loading';
 import EmptyState from '../common/EmptyState';
@@ -25,7 +25,7 @@ import EmptyState from '../common/EmptyState';
 /**
  * Location Report component wrapper that gets location ID from URL params
  */
-function FacilityReport() {
+function LocationReportWrapper() {
   const { facilityId } = useParams();
   const location = locations.find(loc => loc.Location_id === facilityId);
   
@@ -39,7 +39,7 @@ function FacilityReport() {
     );
   }
   
-  return <ReportView facilityId={location.Location_id} facilityName={location.Location_name} />;
+  return <LocationReport locationId={location.Location_id} locationName={location.Location_name} />;
 }
 
 /**
@@ -135,7 +135,7 @@ function Dashboard() {
               <Route path="status" element={<CategoryView type="status" />} />
               <Route path="source" element={<CategoryView type="source" />} />
               <Route path="payments" element={<PaymentsView />} />
-              <Route path="reports/:facilityId" element={<FacilityReport />} />
+              <Route path="reports/:facilityId" element={<LocationReportWrapper />} />
               <Route path="*" element={<Navigate to="table" replace />} />
             </Routes>
           ) : (
