@@ -1,0 +1,21 @@
+S no,Slot Date,Customer Name,Phone,Number of slots,Slot Details,Slot Time,Month,Year,Booking Reference,Status,Source,Sport,Facility,Slot Price,Location,Venue Discount,Cash,UPI,Bank Transfer,Hudle App,Hudle QR,Hudle Wallet,Venue Wallet,Hudle Pass,Hudle Discount,Total Paid,Revenue,Balance
+1,15/04/2024,Aarav Sharma,9876543210,1,Badminton - Indoor Court - 07:00 AM,07:00 AM,April,2024,HUDAB1234,Confirmed,App,Badminton,Indoor Court,800,IMS Noida,0,800,,,,,0,0,,0,800,800,0
+2,22/05/2024,Diya Patel,9988776655,2,Tennis - Outdoor Court - 06:00 PM,06:00 PM,May,2024,HUDCD5678,Confirmed,Website,Tennis,Outdoor Court,1200,Chattarpur,120,,1080,,,,0,0,,0,1080,2400,1200
+3,10/06/2024,Arjun Singh,9912345678,1,Cricket - Practice Net - 04:00 PM,04:00 PM,June,2024,HUDEF9012,Pending,Walk-in,Cricket,Practice Net,1000,Lajpat Nagar,0,500,,,,,,500,,0,1000,1000,0
+4,05/07/2024,Kavya Joshi,7078901234,3,Football - Main Field - 08:00 PM,08:00 PM,July,2024,HUDGH3456,Cancelled,Partner,Football,Main Field,2000,Defence Colony,200,,,1800,,,0,0,,0,1800,6000,4000
+5,18/08/2024,Vihaan Mehta,8867890123,1,Badminton - Training Area - 09:00 AM,09:00 AM,August,2024,HUDIJ7890,Confirmed,Phone,Badminton,Training Area,700,Gurugram,0,,700,,,,0,0,,0,700,700,0
+6,25/09/2024,Ananya Verma,9756789012,2,Tennis - Outdoor Court - 05:00 PM,05:00 PM,September,2024,HUDKL1234,Pending,App,Tennis,Outdoor Court,1500,Vasant Kunj,150,,,,1350,,0,0,,0,1350,3000,0
+7,11/10/2024,Ishaan Kumar,8345678901,1,Cricket - Main Field - 11:00 AM,11:00 AM,October,2024,HUDMN5678,Confirmed,Website,Cricket,Main Field,2500,Greater Kailash,0,,,2500,,,0,0,,0,2500,2500,0
+8,30/11/2024,Saanvi Agarwal,7234567890,2,Football - Turf - 07:00 PM,07:00 PM,November,2024,HUDOP9012,Cancelled,Walk-in,Football,Turf,1800,Saket,0,,,,,,1800,0,,0,1800,3600,0
+9,12/12/2024,Reyansh Gupta,9123456789,1,Badminton - Indoor Court - 06:00 AM,06:00 AM,December,2024,HUDQR3456,Confirmed,Partner,Badminton,Indoor Court,600,Dwarka,60,,,,540,,0,0,,0,540,600,0
+10,22/01/2025,Anika Shah,8912345678,3,Tennis - Practice Net - 10:00 AM,10:00 AM,January,2025,HUDST7890,Pending,Phone,Tennis,Practice Net,1000,Noida,100,,,2700,,,0,0,,0,2700,3000,0
+11,17/02/2025,Dhruv Nair,7701234567,1,Cricket - Turf - 03:00 PM,03:00 PM,February,2025,HUDUV1234,Confirmed,App,Cricket,Turf,1200,Faridabad,0,,1200,,,,0,0,,0,1200,1200,0
+12,05/04/2024,Myra Reddy,9890123456,2,Football - Main Field - 09:00 PM,09:00 PM,April,2024,HUDWX5678,Cancelled,Website,Football,Main Field,2000,Ghaziabad,0,,,,,4000,0,0,,0,4000,4000,0
+13,28/05/2024,Pranav Kapoor,8789012345,1,Badminton - Indoor Court - 08:00 AM,08:00 AM,May,2024,HUDYZ9012,Confirmed,Walk-in,Badminton,Indoor Court,800,East Delhi,80,720,,,,,0,0,,0,720,800,0
+14,15/06/2024,Prisha Chavan,9678901234,1,Tennis - Outdoor Court - 07:00 PM,07:00 PM,June,2024,HUDAB3456,Pending,Partner,Tennis,Outdoor Court,1200,South Delhi,0,,,,1200,,0,0,,0,1200,1200,0
+15,08/07/2024,Atharv Arora,7567890123,2,Cricket - Practice Net - 02:00 PM,02:00 PM,July,2024,HUDCD7890,Confirmed,Phone,Cricket,Practice Net,1000,West Delhi,100,,,1900,,,0,0,,0,1900,2000,0
+16,19/08/2024,Krisha Deshmukh,8456789012,1,Football - Turf - 06:00 PM,06:00 PM,August,2024,HUDEF1234,Cancelled,App,Football,Turf,1800,North Delhi,180,,,,1620,,0,0,,0,1620,1800,0
+17,22/09/2024,Siddharth Kaur,9345678901,3,Badminton - Training Area - 11:00 AM,11:00 AM,September,2024,HUDGH5678,Confirmed,Website,Badminton,Training Area,700,Indirapuram,0,2100,,,,,0,0,,0,2100,2100,0
+18,14/10/2024,Ishita Bose,7234567890,1,Tennis - Indoor Court - 04:00 PM,04:00 PM,October,2024,HUDIJ9012,Pending,Walk-in,Tennis,Indoor Court,1000,Mayur Vihar,0,,,,,,0,1000,,0,1000,1000,0
+19,29/11/2024,Shaurya Das,8123456789,2,Cricket - Main Field - 10:00 AM,10:00 AM,November,2024,HUDKL3456,Confirmed,Partner,Cricket,Main Field,2500,Rohini,250,,,,,,4750,0,,0,4750,5000,0
+20,08/12/2024,Aadhya Patil,9012345678,1,Football - Practice Net - 05:00 PM,05:00 PM,December,2024,HUDMN7890,Cancelled,Phone,Football,Practice Net,1200,IMS Noida,0,,,1200,,,0,0,,0,1200,1200,0

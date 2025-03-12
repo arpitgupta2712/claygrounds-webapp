@@ -1,0 +1,93 @@
+/* index.css */
+@font-face {
+  font-family: 'PT Sans';
+  src: local('PT Sans Regular');
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'PT Sans';
+  src: local('PT Sans Bold');
+  font-weight: 700;
+  font-display: swap;
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: 'PT Sans', system-ui, sans-serif;
+    font-size: 16px;
+    height: 100%;
+    scroll-behavior: smooth;
+  }
+  
+  body {
+    @apply bg-gray-50 text-gray-900;
+    font-family: 'PT Sans', sans-serif;
+    line-height: 1.5;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply mb-2 font-bold leading-tight text-text-dark;
+  }
+
+  /* Use consistent sizing approach that aligns with tailwind.config.js */
+  h1 { @apply text-[28px]; } /* 1.75rem */
+  h2 { @apply text-[24px]; } /* 1.5rem */
+  h3 { @apply text-[20px]; } /* 1.25rem */
+  h4 { @apply text-[18px]; } /* 1.125rem */
+  h5 { @apply text-base; }
+  h6 { @apply text-sm; }
+
+  p {
+    @apply mb-4;
+  }
+
+  a {
+    @apply text-primary transition-colors duration-300;
+  }
+
+  a:hover {
+    @apply text-primary/80;
+  }
+}
+
+@layer components {
+  /* Custom animations that don't overlap with Tailwind's defaults */
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes fadeUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Use these classes with clear naming to avoid conflicts */
+  .animate-fadeIn {
+    animation: fadeIn 0.3s ease-in-out;
+  }
+
+  .animate-fadeUp {
+    animation: fadeUp 0.3s ease;
+  }
+  
+  /* Note: No need to define .animate-spin as Tailwind already provides this */
+}
+
+/* Add any non-Tailwind styles that can't be configured here */
