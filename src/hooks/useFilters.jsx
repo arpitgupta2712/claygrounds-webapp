@@ -34,6 +34,8 @@ export const useFilters = () => {
       // Use dataUtils to get unique values
       const locations = dataUtils.getUniqueValues(bookingsData, 'Location');
       console.log(`[useFilters] Found ${locations.length} unique locations`);
+      // Debug: Log all unique locations
+      console.log('[useFilters] Unique locations:', locations);
       return locations;
     } catch (error) {
       console.error('[useFilters] Error getting locations:', error);
@@ -98,6 +100,13 @@ export const useFilters = () => {
             console.warn('[useFilters] No location selected');
             return;
           }
+          // Debug: Log the exact location value being used
+          console.log('[useFilters] Applying location filter with value:', locationValue);
+          // Debug: Log a sample of bookings with this location
+          const sampleBookings = bookingsData
+            .filter(b => b.Location === locationValue)
+            .slice(0, 3);
+          console.log('[useFilters] Sample bookings with this location:', sampleBookings);
           applyFilter(filterType, locationValue);
           break;
 
@@ -130,7 +139,7 @@ export const useFilters = () => {
   }, [
     filterType, singleDate, startDate, endDate,
     locationValue, textValue, balanceChecked,
-    applyFilter, trackError
+    applyFilter, trackError, bookingsData
   ]);
 
   /**

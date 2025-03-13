@@ -126,7 +126,14 @@ export const filterService = {
     if (!value) return data;
     console.log(`[FilterService] Filtering by field: ${field}=${value}`);
     
-    return data.filter(booking => booking[field] === value);
+    // Normalize the search value
+    const searchValue = String(value).trim().toLowerCase();
+    
+    return data.filter(booking => {
+      const fieldValue = booking[field];
+      // Handle null/undefined values and convert to string for comparison
+      return fieldValue && String(fieldValue).trim().toLowerCase() === searchValue;
+    });
   },
 
   /**
