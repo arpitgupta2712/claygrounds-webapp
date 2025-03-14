@@ -206,7 +206,10 @@ export function AuthProvider({ children }) {
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',
-            hd: 'claygrounds.com'  // Optional: restrict to your domain
+            // Allowing multiple domains:
+            // - claygrounds.com (Sales & Marketing team)
+            // - itmagia.com (Development team)
+            // - Other domains (Investors & Partners)
           }
         }
       });
