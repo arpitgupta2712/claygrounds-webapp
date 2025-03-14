@@ -55,18 +55,19 @@ if (!supabaseAnonKey.includes('.') || supabaseAnonKey.split('.').length !== 3) {
 }
 
 // Initialize Supabase client with enhanced configuration
-const clientOptions = {
+export const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true,
     flowType: 'pkce',
     pkce: {
-      codeChallengeMethod: 'S256'
+      codeChallengeMethod: 'S256',
+      codeChallengeInHeader: true
     },
     storage: window.localStorage,
     storageKey: 'supabase-auth-token',
-    debug: process.env.NODE_ENV === 'development',
+    debug: isDevelopment,
     redirectTo: getFullUrl(ROUTES.AUTH_REDIRECT, siteUrl)
   },
   global: {
@@ -75,29 +76,17 @@ const clientOptions = {
       'X-Environment': appEnv
     }
   }
-};
-
-console.log('[SupabaseService] Initializing client with options:', {
-  ...clientOptions,
-  auth: {
-    ...clientOptions.auth,
-    storage: 'window.localStorage',
-    redirectTo: clientOptions.auth.redirectTo
-  }
 });
-
-// Create client and verify it's working
-const supabase = createClient(supabaseUrl, supabaseAnonKey, clientOptions);
 
 // Verify the client is working with role check
 (async () => {
   try {
-    const { data: { session }, error } = await supabase.auth.getSession();
+    const { data: { session }, error } = await supabaseClient.auth.getSession();
     if (error) {
       console.error('[SupabaseService] Initial session check failed:', error);
     } else if (session) {
       // Get user role and permissions
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
       
       if (userError) {
         console.error('[SupabaseService] Error getting user details:', userError);
@@ -126,7 +115,7 @@ console.log('[SupabaseService] Client Initialized:', {
 
 // Disable Supabase's internal debug logs in production
 if (process.env.NODE_ENV === 'production') {
-  supabase.auth.onAuthStateChange((event, session) => {
+  supabaseClient.auth.onAuthStateChange((event, session) => {
     // Only log critical auth events in production
     if (['SIGNED_OUT', 'USER_DELETED', 'TOKEN_REFRESHED'].includes(event)) {
       logger.info(LogCategory.AUTH, `Auth state changed: ${event}`);
@@ -144,7 +133,7 @@ export async function fetchProtectedCSV(fileName) {
   
   try {
     // Verify session first
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session } } = await supabaseClient.auth.getSession();
     if (!session) {
       throw new Error('No active session');
     }
@@ -155,7 +144,7 @@ export async function fetchProtectedCSV(fileName) {
     });
 
     // List files in bucket to verify access
-    const { data: files, error: listError } = await supabase.storage
+    const { data: files, error: listError } = await supabaseClient.storage
       .from('protected-csvs')
       .list('data');
 
@@ -164,7 +153,7 @@ export async function fetchProtectedCSV(fileName) {
     }
 
     // Download the file
-    const { data, error } = await supabase.storage
+    const { data, error } = await supabaseClient.storage
       .from('protected-csvs')
       .download(`data/${fileName}`);
 
@@ -181,5 +170,3 @@ export async function fetchProtectedCSV(fileName) {
     throw error;
   }
 }
-
-export default supabase;
