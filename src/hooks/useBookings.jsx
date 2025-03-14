@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useErrorTracker } from './useErrorTracker';
@@ -101,128 +101,77 @@ export const useBookings = () => {
    * @param {string} year - Year to load data for
    * @param {boolean} forceRefresh - Force refresh data
    */
-  const loadBookings = useCallback(async (year = selectedYear, forceRefresh = false) => {
-    // Skip if auth is not initialized yet
-    if (!isInitialized) {
-      console.log('[useBookings] Auth not initialized yet, skipping load');
-      return;
-    }
-    
-    // Use a global loading flag to prevent concurrent requests across rerenders
-    if (window.__BOOKINGS_LOADING) {
-      console.log('[useBookings] Global loading flag is set, skipping duplicate request');
-      return;
-    }
-    
-    // Skip if no session and not in dev mode
-    if (!session && !document.body.classList.contains('dev-mode')) {
-      console.warn('[useBookings] User not authenticated. Cannot load bookings.');
-      setError('Authentication required to load bookings.');
-      return;
-    }
-    
-    // Skip if local state shows loading
+  const loadBookings = useCallback(async (year, forceRefresh = false) => {
+    // Skip if already loading
     if (isLoading) {
-      console.log('[useBookings] Local state shows loading, skipping duplicate request');
+      console.log('[useBookings] Already loading data, skipping request');
+      return;
+    }
+
+    // Skip if we already have data and no force refresh
+    if (!forceRefresh && bookingsData?.length > 0 && year === selectedYear) {
+      console.log('[useBookings] Data already loaded for year', year);
       return;
     }
     
-    // Check if we're loading for a different year than what's already loaded
-    const isYearChange = bookingsData && bookingsData.length > 0 && year !== selectedYear;
-    
-    // Skip if we already have data for this year and no force refresh requested
-    if (!forceRefresh && !isYearChange && bookingsData && bookingsData.length > 0) {
-      console.log(`[useBookings] Data already loaded for year ${year}, skipping fetch`);
-      return bookingsData;
-    }
-    
-    // Set both local and global loading flags
-    window.__BOOKINGS_LOADING = true;
     setIsLoading(true);
-    setAppLoading(true);
     setError(null);
     
     try {
-      console.log(`[useBookings] Loading bookings for year: ${year}${forceRefresh ? ' (forced refresh)' : ''}`);
+      const result = await dataService.loadBookings(year, forceRefresh);
       
-      const data = await dataService.loadBookings(year, forceRefresh);
-      
-      if (!data || !Array.isArray(data)) {
-        throw new Error('Invalid data received from server');
+      // Validate the response structure
+      if (!result || typeof result !== 'object') {
+        throw new Error('Invalid data structure received from server');
       }
       
-      console.log(`[useBookings] Loaded ${data.length} bookings for year ${year}`);
+      // Extract bookings array and metadata
+      const { bookings = [], metadata = {} } = result;
       
-      // Apply any filters or sorting
-      let processedData = [...data];
-      
-      if (activeFilters?.type && activeFilters?.value) {
-        processedData = filterService.applyFilters(
-          processedData, 
-          activeFilters.type, 
-          activeFilters.value
-        );
+      // Ensure bookings is an array
+      if (!Array.isArray(bookings)) {
+        throw new Error('Invalid bookings data format');
       }
       
-      if (sortField) {
-        processedData = sortService.sortData(
-          processedData,
-          sortField,
-          sortDirection
-        );
-      }
+      console.log(`[useBookings] Loaded ${bookings.length} bookings for year ${year}`);
       
-      // Group data by different parameters
-      console.log('[useBookings] Grouping data by all required categories');
-      groupData('locations', processedData);
-      groupData('months', processedData);
-      groupData('sports', processedData);
-      groupData('status', processedData);
-      groupData('source', processedData);
-      groupData('payment', processedData);
-      
-      // Update state
+      // Update state with the validated data
       batchUpdate({
-        bookingsData: data,
-        filteredData: processedData,
-        currentPage: 1, // Reset to first page
-        selectedYear: year
+        bookingsData: bookings,
+        filteredData: bookings,
+        selectedYear: year,
+        currentPage: 1,
+        error: metadata.isMockData ? {
+          type: 'warning',
+          message: metadata.errorMessage || 'Using sample data. Some features may be limited.'
+        } : null
       });
       
-      return data;
+      // Group the data by default categories (only if data changed)
+      if (bookings !== bookingsData) {
+        console.log('[useBookings] Data changed, updating groups');
+        groupData('locations', bookings);
+        groupData('months', bookings);
+        groupData('sports', bookings);
+        groupData('status', bookings);
+        groupData('source', bookings);
+        groupData('payment', bookings);
+      }
+      
     } catch (error) {
       console.error('[useBookings] Error loading bookings:', error);
-      
-      setError(error.message);
-      trackError(
-        error,
-        'useBookings.loadBookings',
-        ErrorSeverity.ERROR,
-        ErrorCategory.DATA,
-        { year, forceRefresh }
-      );
-      
-      return null;
+      batchUpdate({
+        bookingsData: [],
+        filteredData: [],
+        error: {
+          type: 'error',
+          message: error.message || 'Failed to load booking data. Please try again.'
+        }
+      });
     } finally {
-      // Always clean up loading state flags
       setIsLoading(false);
-      setAppLoading(false);
-      window.__BOOKINGS_LOADING = false;
     }
-  }, [
-    selectedYear,
-    session,
-    isInitialized,
-    isLoading,
-    setAppLoading,
-    trackError,
-    bookingsData,
-    activeFilters,
-    sortField,
-    sortDirection,
-    batchUpdate,
-    groupData
-  ]);
+  }, [isLoading, bookingsData, selectedYear, batchUpdate, groupData]);
   
   /**
    * Apply filtering to booking data
@@ -374,10 +323,20 @@ export const useBookings = () => {
     }
   }, [loadBookings, selectedYear, trackError]);
   
+  // Memoize the filtered data to prevent unnecessary recalculations
+  const memoizedFilteredData = useMemo(() => {
+    if (!bookingsData || !activeFilters?.type) return bookingsData;
+    return filterService.applyFilters(bookingsData, activeFilters.type, activeFilters.value);
+  }, [bookingsData, activeFilters]);
+
   // Auto-load data when selectedYear changes or user logs in
   useEffect(() => {
-    if ((session || document.body.classList.contains('dev-mode')) && isInitialized) {
-      loadBookings(selectedYear);
+    if ((session || document.body.classList.contains('dev-mode')) && isInitialized && selectedYear) {
+      // Add a small delay to prevent rapid consecutive loads
+      const timeoutId = setTimeout(() => {
+        loadBookings(selectedYear);
+      }, 100);
+      return () => clearTimeout(timeoutId);
     }
   }, [selectedYear, session, isInitialized, loadBookings]);
   

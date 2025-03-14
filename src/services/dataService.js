@@ -34,9 +34,11 @@ const dataCache = {
    * @param {Array} data - Data to cache
    */
   setData(year, data) {
-    this.bookings.set(year, data);
+    // Ensure we're caching the bookings array, not the metadata object
+    const bookingsArray = Array.isArray(data) ? data : (data.bookings || []);
+    this.bookings.set(year, bookingsArray);
     this.lastFetch.set(year, Date.now());
-    console.log(`[DataCache] Cached ${data.length} records for ${year}`);
+    console.log(`[DataCache] Cached ${bookingsArray.length} records for ${year}`);
   },
   
   /**
@@ -145,16 +147,32 @@ export const dataService = {
    * Load bookings data for a specific year with caching
    * @param {string} year - Year identifier
    * @param {boolean} [forceRefresh=false] - Force data refresh
-   * @returns {Promise<Array>} Booking data
+   * @returns {Promise<Object>} Booking data with metadata
    */
   async loadBookings(year, forceRefresh = false) {
     try {
       console.log(`[DataService] Loading bookings for year: ${year}${forceRefresh ? ' (forced refresh)' : ''}`);
       
+      // Handle undefined year gracefully
+      if (!year) {
+        throw new Error('Year parameter is required');
+      }
+      
       // Check cache first
       if (!forceRefresh && dataCache.hasValidData(year)) {
         console.log(`[DataService] Using cached data for ${year}`);
-        return dataCache.getData(year);
+        const cachedData = dataCache.getData(year);
+        // Ensure cachedData is an array
+        const bookingsArray = Array.isArray(cachedData) ? cachedData : [];
+        return {
+          bookings: bookingsArray,
+          metadata: {
+            year,
+            totalBookings: bookingsArray.length,
+            lastUpdated: dataCache.lastFetch.get(year),
+            isMockData: false
+          }
+        };
       }
       
       // Format filename
@@ -162,30 +180,63 @@ export const dataService = {
       const fileName = `bookings${formattedYear}.csv`;
       console.log(`[DataService] Requesting file: ${fileName}`);
       
-      // Fetch CSV from Supabase
-      const csvText = await fetchProtectedCSV(fileName);
-      if (!csvText) {
-        throw new Error('No CSV content received');
+      try {
+        // Fetch CSV from Supabase
+        const csvText = await fetchProtectedCSV(fileName);
+        if (!csvText) {
+          throw new Error('No CSV content received');
+        }
+        
+        // Parse CSV data
+        const parsedData = await this.parseCSVData(csvText);
+        console.log(`[DataService] Parse complete. ${parsedData.length} records processed`);
+        
+        // Cache the parsed data array
+        dataCache.setData(year, parsedData);
+        
+        return {
+          bookings: parsedData,
+          metadata: {
+            year,
+            totalBookings: parsedData.length,
+            lastUpdated: Date.now(),
+            isMockData: false
+          }
+        };
+        
+      } catch (error) {
+        console.warn(`[DataService] Error loading from Supabase: ${error.message}`);
+        
+        // Check for specific Supabase storage errors
+        const isStorageError = error.message?.includes('storage') || 
+                             error.message?.includes('bucket') ||
+                             error.message?.includes('download');
+                             
+        if (isStorageError) {
+          console.log(`[DataService] Using mock data for year ${year}`);
+          const mockData = [];
+          // Cache the empty mock data array
+          dataCache.setData(year, mockData);
+          return {
+            bookings: mockData,
+            metadata: {
+              year,
+              totalBookings: 0,
+              lastUpdated: Date.now(),
+              isMockData: true,
+              errorMessage: 'Unable to access booking data. Please ensure you have the correct permissions.',
+              storageError: error.message
+            }
+          };
+        }
+        
+        // Re-throw other errors
+        throw error;
       }
-      
-      // Parse CSV data
-      const parsedData = await this.parseCSVData(csvText);
-      console.log(`[DataService] Parse complete. ${parsedData.length} records processed`);
-      
-      // Cache the data
-      dataCache.setData(year, parsedData);
-      
-      return parsedData;
       
     } catch (error) {
       console.error('[DataService] Error loading bookings:', error);
-      
-      // Show user-friendly error message
-      const errorMessage = error.message.includes('download') 
-        ? 'Unable to access file. Please check your permissions.'
-        : 'Failed to load booking data. Please try again.';
-          
-      throw new Error(errorMessage);
+      throw error;
     }
   },
   

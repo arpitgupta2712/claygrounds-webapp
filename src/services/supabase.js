@@ -1,11 +1,21 @@
 import { createClient } from '@supabase/supabase-js';
+import { logger, LogCategory, LogLevel } from '../utils/logger';
 import { ROUTES, getFullUrl } from '../config/routes';
 
-// Get environment variables
+// Get environment variables and clean them
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
 const appEnv = import.meta.env.VITE_APP_ENV || 'development';
 const siteUrl = import.meta.env.VITE_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
+
+// Debug: Log key format and first few characters
+console.log('[SupabaseService] Key Format Check:', {
+  keyParts: supabaseAnonKey?.split('.').length || 0,
+  keyLength: supabaseAnonKey?.length || 0,
+  isValidJWT: supabaseAnonKey?.split('.').length === 3,
+  keyStart: supabaseAnonKey?.substring(0, 20) + '...',
+  keyEnd: '...' + supabaseAnonKey?.substring(supabaseAnonKey.length - 20)
+});
 
 // Enhanced debug logging for environment setup
 console.log('[SupabaseService] Environment Setup:', {
@@ -15,7 +25,6 @@ console.log('[SupabaseService] Environment Setup:', {
   supabaseUrlLength: supabaseUrl?.length,
   hasAnonKey: !!supabaseAnonKey,
   anonKeyLength: supabaseAnonKey?.length,
-  supabaseUrl: supabaseUrl ? `${supabaseUrl.substring(0, 8)}...` : null, // Show first 8 chars only
   redirectUrl: getFullUrl(ROUTES.AUTH_REDIRECT, siteUrl)
 });
 
@@ -41,49 +50,72 @@ try {
 }
 
 // Validate Supabase key format (should be a JWT)
-if (!supabaseAnonKey.includes('.')) {
-  throw new Error('Invalid VITE_SUPABASE_ANON_KEY format: Should be a JWT token');
+if (!supabaseAnonKey.includes('.') || supabaseAnonKey.split('.').length !== 3) {
+  throw new Error('Invalid VITE_SUPABASE_ANON_KEY format: Should be a valid JWT token with 3 parts');
 }
 
 // Initialize Supabase client with enhanced configuration
-export const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+const clientOptions = {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true,
     flowType: 'pkce',
     pkce: {
-      codeChallengeMethod: 'S256',
-      codeChallengeInHeader: true
+      codeChallengeMethod: 'S256'
     },
     storage: window.localStorage,
     storageKey: 'supabase-auth-token',
-    debug: isDevelopment,
-    redirectTo: getFullUrl(ROUTES.AUTH_REDIRECT, siteUrl),
-    onAuthStateChange: (event, session) => {
-      console.log('[SupabaseService] Auth State Change:', {
-        event,
-        hasSession: !!session,
-        userId: session?.user?.id,
-        timestamp: new Date().toISOString()
-      });
-    },
-    onError: (error) => {
-      console.error('[SupabaseService] Auth Error:', {
-        message: error.message,
-        status: error.status,
-        name: error.name,
-        timestamp: new Date().toISOString()
-      });
-    }
+    debug: process.env.NODE_ENV === 'development',
+    redirectTo: getFullUrl(ROUTES.AUTH_REDIRECT, siteUrl)
   },
-  persistSession: true,
-  detectSessionInUrl: true,
-  headers: {
-    'X-Client-Info': 'claygrounds-webapp',
-    'X-Environment': appEnv
+  global: {
+    headers: {
+      'X-Client-Info': 'claygrounds-webapp',
+      'X-Environment': appEnv
+    }
+  }
+};
+
+console.log('[SupabaseService] Initializing client with options:', {
+  ...clientOptions,
+  auth: {
+    ...clientOptions.auth,
+    storage: 'window.localStorage',
+    redirectTo: clientOptions.auth.redirectTo
   }
 });
+
+// Create client and verify it's working
+const supabase = createClient(supabaseUrl, supabaseAnonKey, clientOptions);
+
+// Verify the client is working with role check
+(async () => {
+  try {
+    const { data: { session }, error } = await supabase.auth.getSession();
+    if (error) {
+      console.error('[SupabaseService] Initial session check failed:', error);
+    } else if (session) {
+      // Get user role and permissions
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+      if (userError) {
+        console.error('[SupabaseService] Error getting user details:', userError);
+      } else {
+        console.log('[SupabaseService] Initial session check successful:', {
+          role: user?.role || 'authenticated',
+          id: user?.id,
+          email: user?.email,
+          hasSession: true
+        });
+      }
+    } else {
+      console.log('[SupabaseService] No active session');
+    }
+  } catch (err) {
+    console.error('[SupabaseService] Error during initial session check:', err);
+  }
+})();
 
 // Log client initialization
 console.log('[SupabaseService] Client Initialized:', {
@@ -92,63 +124,62 @@ console.log('[SupabaseService] Client Initialized:', {
   redirectUrl: getFullUrl(ROUTES.AUTH_REDIRECT, siteUrl)
 });
 
+// Disable Supabase's internal debug logs in production
+if (process.env.NODE_ENV === 'production') {
+  supabase.auth.onAuthStateChange((event, session) => {
+    // Only log critical auth events in production
+    if (['SIGNED_OUT', 'USER_DELETED', 'TOKEN_REFRESHED'].includes(event)) {
+      logger.info(LogCategory.AUTH, `Auth state changed: ${event}`);
+    }
+  });
+}
+
 /**
  * Fetch protected CSV from Supabase
  * @param {string} fileName - Name of the CSV file to fetch
  * @returns {Promise<string>} CSV content as string
  */
 export async function fetchProtectedCSV(fileName) {
+  logger.debug(LogCategory.DATA, `Fetching CSV: ${fileName}`);
+  
   try {
-    console.log(`[SupabaseService] Fetching protected CSV: ${fileName}`);
-
-    // Check if mock data is enabled
-    if (import.meta.env.VITE_ENABLE_MOCK_DATA === 'true') {
-      console.log('[SupabaseService] Using mock data');
-      try {
-        const response = await fetch(`/mock/${fileName}`);
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const text = await response.text();
-        console.log(`[SupabaseService] Mock data loaded, length: ${text.length}`);
-        return text;
-      } catch (error) {
-        console.error('[SupabaseService] Error loading mock data:', error);
-        throw error;
-      }
-    }
-
-    // Get current session
-    const { data: { session }, error: sessionError } = await supabaseClient.auth.getSession();
-    
-    if (sessionError) {
-      throw new Error(`Session error: ${sessionError.message}`);
-    }
-
+    // Verify session first
+    const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
-      throw new Error('No active session found');
+      throw new Error('No active session');
+    }
+    
+    logger.debug(LogCategory.AUTH, 'Session verified', {
+      userId: session.user.id,
+      email: session.user.email
+    });
+
+    // List files in bucket to verify access
+    const { data: files, error: listError } = await supabase.storage
+      .from('protected-csvs')
+      .list('data');
+
+    if (listError) {
+      throw listError;
     }
 
-    // Download file from Supabase Storage
-    const { data, error } = await supabaseClient.storage
+    // Download the file
+    const { data, error } = await supabase.storage
       .from('protected-csvs')
-      .download(fileName);
+      .download(`data/${fileName}`);
 
     if (error) {
-      console.error('[SupabaseService] Storage error:', error);
       throw error;
     }
 
-    if (!data) {
-      throw new Error('No data received from storage');
-    }
-
     const text = await data.text();
-    console.log(`[SupabaseService] CSV retrieved, length: ${text.length}`);
-    
+    logger.debug(LogCategory.DATA, `CSV retrieved, length: ${text.length}`);
     return text;
+
   } catch (error) {
-    console.error('[SupabaseService] Error fetching CSV:', error);
+    logger.error(LogCategory.DATA, `Failed to fetch CSV: ${fileName}`, error);
     throw error;
   }
 }
+
+export default supabase;

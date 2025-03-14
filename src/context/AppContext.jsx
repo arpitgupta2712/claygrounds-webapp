@@ -1,4 +1,4 @@
-import { createContext, useState, useContext, useReducer, useCallback, useEffect } from 'react';
+import { createContext, useState, useContext, useReducer, useCallback, useEffect, useMemo } from 'react';
 import { useErrorTracker } from '../hooks/useErrorTracker';
 import { ErrorSeverity, ErrorCategory } from '../utils/errorTypes';
 import { CONSTANTS, ViewTypes, FilterTypes } from '../utils/constants';
@@ -105,19 +105,20 @@ export function AppProvider({ children }) {
   
   // Action creators with error tracking
   const setBookingsData = useCallback((data) => {
-    try {
-      console.log('[AppContext] Setting bookings data, length:', data?.length);
-      dispatch({ type: ActionTypes.SET_BOOKINGS_DATA, payload: data });
-    } catch (error) {
-      console.error('[AppContext] Error setting bookings data:', error);
-      trackError(
-        error,
-        'AppContext.setBookingsData',
-        ErrorSeverity.ERROR,
-        ErrorCategory.DATA
-      );
+    console.log('[AppContext] Setting bookings data, length:', data?.length);
+    if (!data) return;
+    
+    // Make the data available globally for debugging
+    if (Array.isArray(data) && data.length > 0) {
+      console.log('[AppContext] Making bookings data available globally');
+      window.__BOOKINGS_DATA = data;
+    } else {
+      console.log('[AppContext] No bookings data to make available globally');
+      delete window.__BOOKINGS_DATA;
     }
-  }, [trackError]);
+    
+    dispatch({ type: ActionTypes.SET_BOOKINGS_DATA, payload: data });
+  }, []);
   
   const setFilteredData = useCallback((data) => {
     try {
@@ -269,43 +270,25 @@ export function AppProvider({ children }) {
   }, [trackError]);
   
   const batchUpdate = useCallback((updates) => {
-    try {
-      console.log('[AppContext] Batch updating state:', Object.keys(updates));
-      dispatch({ type: ActionTypes.BATCH_UPDATE, payload: updates });
-    } catch (error) {
-      console.error('[AppContext] Error in batch update:', error);
-      trackError(
-        error,
-        'AppContext.batchUpdate',
-        ErrorSeverity.ERROR,
-        ErrorCategory.STATE
-      );
+    // Skip update if nothing changed
+    const hasChanges = Object.entries(updates).some(
+      ([key, value]) => state[key] !== value
+    );
+    
+    if (!hasChanges) {
+      console.log('[AppContext] No changes detected, skipping update');
+      return;
     }
-  }, [trackError]);
+    
+    console.log('[AppContext] Batch updating state:', Object.keys(updates));
+    dispatch({ type: ActionTypes.BATCH_UPDATE, payload: updates });
+  }, [state]);
   
   // Initialization flag
   window.BOOKINGS_DATA_READY = window.BOOKINGS_DATA_READY || false;
   
-  // Make data available globally for services
-  useEffect(() => {
-    // Create a globally accessible object for application data
-    window.appData = window.appData || {};
-    
-    // Only update if we have actual data
-    if (state.bookingsData && state.bookingsData.length > 0) {
-      console.log(`[AppContext] Making ${state.bookingsData.length} bookings available globally via window.appData`);
-      window.appData.bookingsData = state.bookingsData;
-      window.appData.filteredData = state.filteredData;
-      window.appData.selectedYear = state.selectedYear;
-      window.BOOKINGS_DATA_READY = true;
-    } else {
-      console.log('[AppContext] No bookings data to make available globally');
-      window.BOOKINGS_DATA_READY = false;
-    }
-  }, [state.bookingsData, state.filteredData, state.selectedYear]);
-  
-  // Value object
-  const value = {
+  // Memoize the context value to prevent unnecessary renders
+  const value = useMemo(() => ({
     // State
     ...state,
     
@@ -326,7 +309,38 @@ export function AppProvider({ children }) {
     CONSTANTS,
     ViewTypes,
     FilterTypes,
-  };
+  }), [
+    state,
+    setBookingsData,
+    setFilteredData,
+    setCurrentPage,
+    setCurrentView,
+    setIsLoading,
+    setSelectedYear,
+    setActiveFilters,
+    setCategoryType,
+    setSelectedCategory,
+    setSort,
+    batchUpdate
+  ]);
+  
+  // Make data available globally for debugging only in development
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      if (state.bookingsData?.length > 0) {
+        console.log(`[AppContext] Making ${state.bookingsData.length} bookings available globally via window.appData`);
+        window.appData = {
+          bookingsData: state.bookingsData,
+          filteredData: state.filteredData,
+          selectedYear: state.selectedYear
+        };
+        window.BOOKINGS_DATA_READY = true;
+      } else {
+        console.log('[AppContext] No bookings data to make available globally');
+        window.BOOKINGS_DATA_READY = false;
+      }
+    }
+  }, [state.bookingsData, state.filteredData, state.selectedYear]);
   
   return (
     <AppContext.Provider value={value}>
