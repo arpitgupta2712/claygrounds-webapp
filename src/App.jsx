@@ -1,51 +1,75 @@
-import { useState, useEffect } from 'react';
+import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext';
+import { ErrorProvider, ErrorDisplay } from './context/ErrorContext';
 import { AppProvider } from './context/AppContext';
-import LoginPage from './components/auth/LoginPage';
+import { AuthProvider } from './context/AuthContext';
 import Dashboard from './components/dashboard/Dashboard';
+import LoginPage from './components/auth/LoginPage';
 import ProtectedRoute from './components/auth/ProtectedRoute';
-import ErrorBoundary from './components/common/ErrorBoundary';
-import VisualizationsPage from './pages/VisualizationsPage';
+import { withErrorBoundary } from './components/common/ErrorBoundary';
 
-function App() {
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    // Initialize app
-    console.log('[App] Initializing application');
-    const timeout = setTimeout(() => setIsLoading(false), 1000);
-    return () => clearTimeout(timeout);
-  }, []);
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="animate-spin h-12 w-12 border-4 border-primary border-t-transparent rounded-full"></div>
-      </div>
-    );
-  }
-
+function AppFallback({ error }) {
   return (
-    <ErrorBoundary>
-      <AuthProvider>
-        <AppProvider>
-          <Router>
-            <Routes>
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/dashboard/*" element={
-                <ProtectedRoute>
-                  <Dashboard />
-                </ProtectedRoute>
-              } />
-              <Route path="/visualizations" element={<VisualizationsPage />} />
-              <Route path="*" element={<Navigate to="/dashboard" replace />} />
-            </Routes>
-          </Router>
-        </AppProvider>
-      </AuthProvider>
-    </ErrorBoundary>
+    <div className="min-h-screen flex items-center justify-center bg-background-light p-4">
+      <div className="max-w-lg w-full bg-white rounded-lg shadow-xl p-8 border-l-4 border-error">
+        <h1 className="text-2xl font-bold text-error mb-4">Application Error</h1>
+        <p className="text-gray-600 mb-6">
+          We encountered a critical error while running the application. Please try refreshing the page.
+        </p>
+        <div className="bg-error-light rounded p-4 mb-6">
+          <p className="text-error font-mono text-sm">{error?.message || 'Unknown error occurred'}</p>
+        </div>
+        <div className="flex gap-4">
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-primary text-white rounded hover:bg-primary-dark transition-colors"
+          >
+            Refresh Page
+          </button>
+          <a
+            href="/"
+            className="px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 transition-colors"
+          >
+            Go to Home
+          </a>
+        </div>
+      </div>
+    </div>
   );
 }
 
-export default App;
+// Create an error boundary wrapped App component
+const AppWithErrorBoundary = withErrorBoundary(
+  function App() {
+    return (
+      <ErrorProvider>
+        <Router>
+          <AuthProvider>
+            <AppProvider>
+              <ErrorDisplay />
+              <Routes>
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/dashboard/*" element={
+                  <ProtectedRoute>
+                    <Dashboard />
+                  </ProtectedRoute>
+                } />
+                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              </Routes>
+            </AppProvider>
+          </AuthProvider>
+        </Router>
+      </ErrorProvider>
+    );
+  },
+  {
+    fallback: AppFallback,
+    context: 'App',
+    metadata: {
+      feature: 'app',
+      importance: 'critical'
+    }
+  }
+);
+
+export default AppWithErrorBoundary;

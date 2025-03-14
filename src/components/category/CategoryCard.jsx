@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import PropTypes from 'prop-types';
 import { formatUtils } from '../../utils/formatUtils';
-import { Tooltip } from '../table/BookingTable';
+import Tooltip from '../common/Tooltip';
 
 /**
  * CategoryCard component displays category information with key statistics

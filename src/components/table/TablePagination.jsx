@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, memo } from 'react';
 import PropTypes from 'prop-types';
 import { useApp } from '../../context/AppContext';
 
@@ -106,4 +106,5 @@ TablePagination.propTypes = {
   className: PropTypes.string
 };
 
-export default TablePagination;
+// Memoize the TablePagination component
+export default memo(TablePagination);

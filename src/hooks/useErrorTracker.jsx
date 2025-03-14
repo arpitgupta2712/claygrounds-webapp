@@ -75,14 +75,38 @@ if (typeof window !== 'undefined') {
 
 // Global track error function
 function trackErrorGlobal(error, context, severity, category, metadata = {}) {
+  // Handle null errors (used for logging non-error events)
+  if (!error && severity === ErrorSeverity.INFO) {
+    const errorInfo = {
+      id: `log_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      timestamp: new Date(),
+      message: metadata.message || 'Info event',
+      stack: null,
+      context,
+      severity,
+      category,
+      metadata,
+      userInfo: errorStore.getUserInfo()
+    };
+
+    // Console logging if enabled
+    if (errorStore.consoleLogging) {
+      console.groupCollapsed(`[${context}][${severity}][${category}] ${errorInfo.message}`);
+      console.info('Event details:', errorInfo);
+      console.groupEnd();
+    }
+
+    return errorInfo;
+  }
+
   // Create error object if string was passed
   const errorObj = typeof error === 'string' ? new Error(error) : error;
   
   const errorInfo = {
     id: `err_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
     timestamp: new Date(),
-    message: errorObj.message || 'Unknown error',
-    stack: errorObj.stack,
+    message: errorObj?.message || 'Unknown error',
+    stack: errorObj?.stack,
     context,
     severity,
     category,

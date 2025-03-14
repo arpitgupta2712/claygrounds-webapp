@@ -1,5 +1,5 @@
 // src/components/table/TableView.jsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, memo } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useBookings } from '../../hooks/useBookings';
 import { useErrorTracker } from '../../hooks/useErrorTracker';
@@ -64,7 +64,7 @@ function TableView() {
    * Handle row click to show booking details
    * @param {Object} booking - Booking data for the clicked row
    */
-  const handleRowClick = (booking) => {
+  const handleRowClick = useCallback((booking) => {
     try {
       console.log('[TableView] Row clicked, showing booking details');
       setSelectedBooking(booking);
@@ -78,13 +78,13 @@ function TableView() {
         ErrorCategory.UI
       );
     }
-  };
+  }, [trackError]);
   
   /**
    * Handle header click for sorting
    * @param {string} field - Field to sort by
    */
-  const handleHeaderClick = (field) => {
+  const handleHeaderClick = useCallback((field) => {
     try {
       console.log(`[TableView] Header clicked for field: ${field}`);
       applySorting(field);
@@ -98,13 +98,13 @@ function TableView() {
         { field }
       );
     }
-  };
+  }, [applySorting, trackError]);
   
   /**
    * Handle pagination change
    * @param {number} page - New page number
    */
-  const handlePageChange = (page) => {
+  const handlePageChange = useCallback((page) => {
     try {
       console.log(`[TableView] Changing to page ${page}`);
       setCurrentPage(page);
@@ -124,15 +124,15 @@ function TableView() {
         { page }
       );
     }
-  };
+  }, [setCurrentPage, trackError]);
   
   /**
    * Close the booking detail modal
    */
-  const handleCloseModal = () => {
+  const handleCloseModal = useCallback(() => {
     setShowModal(false);
     setSelectedBooking(null);
-  };
+  }, []);
 
   return (
     <div className="animate-fadeIn">
@@ -208,4 +208,5 @@ function TableView() {
   );
 }
 
-export default TableView;
+// Memoize the entire TableView component
+export default memo(TableView);

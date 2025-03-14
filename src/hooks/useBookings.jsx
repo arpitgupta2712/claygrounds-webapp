@@ -17,7 +17,7 @@ export const useBookings = () => {
   const [error, setError] = useState(null);
   const [groupedData, setGroupedData] = useState({});
   const { trackError } = useErrorTracker();
-  const { session } = useAuth();
+  const { session, isInitialized } = useAuth();
   
   const {
     bookingsData, filteredData, sortField, sortDirection, 
@@ -102,6 +102,12 @@ export const useBookings = () => {
    * @param {boolean} forceRefresh - Force refresh data
    */
   const loadBookings = useCallback(async (year = selectedYear, forceRefresh = false) => {
+    // Skip if auth is not initialized yet
+    if (!isInitialized) {
+      console.log('[useBookings] Auth not initialized yet, skipping load');
+      return;
+    }
+    
     // Use a global loading flag to prevent concurrent requests across rerenders
     if (window.__BOOKINGS_LOADING) {
       console.log('[useBookings] Global loading flag is set, skipping duplicate request');
@@ -111,6 +117,7 @@ export const useBookings = () => {
     // Skip if no session and not in dev mode
     if (!session && !document.body.classList.contains('dev-mode')) {
       console.warn('[useBookings] User not authenticated. Cannot load bookings.');
+      setError('Authentication required to load bookings.');
       return;
     }
     
@@ -191,7 +198,8 @@ export const useBookings = () => {
         error,
         'useBookings.loadBookings',
         ErrorSeverity.ERROR,
-        ErrorCategory.DATA
+        ErrorCategory.DATA,
+        { year, forceRefresh }
       );
       
       return null;
@@ -202,14 +210,15 @@ export const useBookings = () => {
       window.__BOOKINGS_LOADING = false;
     }
   }, [
-    selectedYear, 
-    session, 
-    isLoading, 
-    setAppLoading, 
-    trackError, 
+    selectedYear,
+    session,
+    isInitialized,
+    isLoading,
+    setAppLoading,
+    trackError,
     bookingsData,
-    activeFilters, 
-    sortField, 
+    activeFilters,
+    sortField,
     sortDirection,
     batchUpdate,
     groupData
@@ -367,10 +376,10 @@ export const useBookings = () => {
   
   // Auto-load data when selectedYear changes or user logs in
   useEffect(() => {
-    if (session || document.body.classList.contains('dev-mode')) {
+    if ((session || document.body.classList.contains('dev-mode')) && isInitialized) {
       loadBookings(selectedYear);
     }
-  }, [selectedYear, session, loadBookings]);
+  }, [selectedYear, session, isInitialized, loadBookings]);
   
   return {
     bookingsData,
