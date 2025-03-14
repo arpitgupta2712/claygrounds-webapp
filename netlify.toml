@@ -1,31 +1,24 @@
 [build]
   command = "npm run build"
   publish = "dist"
-  environment = { NODE_VERSION = "18" }
 
 [build.environment]
+  NODE_VERSION = "18"
   VITE_APP_ENV = "production"
   VITE_ENABLE_MOCK_DATA = "false"
   VITE_ENABLE_DEBUG_LOGGING = "false"
 
-# Production context: all deploys from the Production branch set in your site's
-# deploy contexts will inherit these settings.
-[context.production.environment]
-  VITE_APP_ENV = "production"
-  # Note: Sensitive values like SUPABASE_URL and SUPABASE_ANON_KEY should be set
-  # through the Netlify UI, not here
+# Production context
+[context.production]
+  environment = { NODE_VERSION = "18" }
 
-# Deploy Preview context: all deploys generated from a pull/merge request will
-# inherit these settings.
-[context.deploy-preview.environment]
-  VITE_APP_ENV = "preview"
-  VITE_ENABLE_DEBUG_LOGGING = "true"
+# Deploy Preview context
+[context.deploy-preview]
+  environment = { NODE_VERSION = "18" }
 
-# Branch Deploy context: all deploys that are not from a pull/merge request or
-# from the Production branch will inherit these settings.
-[context.branch-deploy.environment]
-  VITE_APP_ENV = "development"
-  VITE_ENABLE_DEBUG_LOGGING = "true"
+# Branch Deploy context
+[context.branch-deploy]
+  environment = { NODE_VERSION = "18" }
 
 [[redirects]]
   from = "/*"
@@ -39,7 +32,6 @@
     X-XSS-Protection = "1; mode=block"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
-    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
 
 [[headers]]
   for = "/*.js"
