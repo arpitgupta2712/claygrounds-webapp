@@ -4,29 +4,41 @@
 
 [build.environment]
   NODE_VERSION = "18"
-  VITE_APP_ENV = "production"
+  # Common settings for all environments
   VITE_ENABLE_MOCK_DATA = "false"
   VITE_ENABLE_DEBUG_LOGGING = "false"
 
 # Production context
 [context.production.environment]
   NODE_VERSION = "18"
+  VITE_APP_ENV = "production"
   VITE_SITE_URL = "https://partner.claygrounds.com"
+  VITE_ENABLE_MOCK_DATA = "false"
+  VITE_ENABLE_DEBUG_LOGGING = "false"
 
 # Development branch context
 [context.development.environment]
   NODE_VERSION = "18"
+  VITE_APP_ENV = "development"
   VITE_SITE_URL = "https://development--claygroundspartner.netlify.app"
+  VITE_ENABLE_MOCK_DATA = "false"
+  VITE_ENABLE_DEBUG_LOGGING = "true"
 
 # Branch Deploy context
 [context.branch-deploy.environment]
   NODE_VERSION = "18"
+  VITE_APP_ENV = "development"
   VITE_SITE_URL = "https://development--claygroundspartner.netlify.app"
+  VITE_ENABLE_MOCK_DATA = "false"
+  VITE_ENABLE_DEBUG_LOGGING = "true"
 
 # Deploy Preview context
 [context.deploy-preview.environment]
   NODE_VERSION = "18"
+  VITE_APP_ENV = "development"
   VITE_SITE_URL = "https://development--claygroundspartner.netlify.app"
+  VITE_ENABLE_MOCK_DATA = "false"
+  VITE_ENABLE_DEBUG_LOGGING = "true"
 
 [[redirects]]
   from = "/*"
@@ -40,16 +52,19 @@
     X-XSS-Protection = "1; mode=block"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
+    Content-Security-Policy = "frame-ancestors 'none'"
 
 [[headers]]
   for = "/*.js"
   [headers.values]
     Content-Type = "text/javascript"
+    Cache-Control = "public, max-age=31536000, immutable"
 
 [[headers]]
   for = "/*.css"
   [headers.values]
     Content-Type = "text/css"
+    Cache-Control = "public, max-age=31536000, immutable"
 
 [[headers]]
   for = "/manifest.json"

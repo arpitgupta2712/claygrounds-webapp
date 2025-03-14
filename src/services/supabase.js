@@ -7,20 +7,30 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const appEnv = import.meta.env.VITE_APP_ENV;
 const siteUrl = import.meta.env.VITE_SITE_URL;
 
-// Log environment info (will remove after testing)
-console.log(`[SupabaseService] Initializing in ${appEnv} environment (Deploy Preview Test)`);
-console.log(`[SupabaseService] URL configured: ${supabaseUrl ? 'Yes' : 'No'}`);
-console.log(`[SupabaseService] Key configured: ${supabaseAnonKey ? 'Yes' : 'No'}`);
-console.log(`[SupabaseService] Site URL: ${siteUrl}`);
+// Enhanced debug logging for environment setup
+console.log('[SupabaseService] Environment Setup:', {
+  environment: appEnv,
+  siteUrl,
+  hasSupabaseUrl: !!supabaseUrl,
+  supabaseUrlLength: supabaseUrl?.length,
+  hasAnonKey: !!supabaseAnonKey,
+  anonKeyLength: supabaseAnonKey?.length,
+  redirectUrl: getFullUrl(ROUTES.AUTH_REDIRECT, siteUrl)
+});
 
 // Validate environment variables
 if (!supabaseUrl || !supabaseAnonKey || !siteUrl) {
+  const missingVars = [];
+  if (!supabaseUrl) missingVars.push('VITE_SUPABASE_URL');
+  if (!supabaseAnonKey) missingVars.push('VITE_SUPABASE_ANON_KEY');
+  if (!siteUrl) missingVars.push('VITE_SITE_URL');
+  
   throw new Error(
-    'Missing environment variables. Please check your .env file and ensure VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, and VITE_SITE_URL are set.'
+    `Missing environment variables: ${missingVars.join(', ')}. Current environment: ${appEnv}`
   );
 }
 
-// Initialize Supabase client with environment variables
+// Initialize Supabase client with enhanced configuration
 export const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
@@ -28,23 +38,51 @@ export const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
     detectSessionInUrl: true,
     flowType: 'pkce',
     pkce: {
-      codeChallengeMethod: 'S256'
+      codeChallengeMethod: 'S256',
+      codeChallengeInHeader: true // Add PKCE challenge in header
     },
     storage: window.localStorage,
     storageKey: 'supabase-auth-token',
-    debug: true,  // Enable debug logs
-    redirectTo: getFullUrl(ROUTES.AUTH_REDIRECT, siteUrl)
+    debug: true,
+    redirectTo: getFullUrl(ROUTES.AUTH_REDIRECT, siteUrl),
+    onAuthStateChange: (event, session) => {
+      console.log('[SupabaseService] Auth State Change:', {
+        event,
+        hasSession: !!session,
+        userId: session?.user?.id,
+        timestamp: new Date().toISOString()
+      });
+    },
+    // Add global error handler
+    onError: (error) => {
+      console.error('[SupabaseService] Auth Error:', {
+        message: error.message,
+        status: error.status,
+        name: error.name,
+        timestamp: new Date().toISOString()
+      });
+    }
   },
-  // Add additional options as needed
   persistSession: true,
   detectSessionInUrl: true,
   headers: {
-    'X-Client-Info': 'claygrounds-webapp'
+    'X-Client-Info': 'claygrounds-webapp',
+    'X-Environment': appEnv
+  },
+  // Add global error handler
+  global: {
+    headers: {
+      'X-Client-Info': `claygrounds-webapp-${appEnv}`
+    }
   }
 });
 
-// Log additional debug info
-console.log('[SupabaseService] Client configured with redirectTo:', getFullUrl(ROUTES.AUTH_REDIRECT, siteUrl));
+// Log client initialization
+console.log('[SupabaseService] Client Initialized:', {
+  timestamp: new Date().toISOString(),
+  environment: appEnv,
+  redirectUrl: getFullUrl(ROUTES.AUTH_REDIRECT, siteUrl)
+});
 
 /**
  * Fetch protected CSV from Supabase

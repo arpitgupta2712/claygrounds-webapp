@@ -2,7 +2,7 @@ import { createContext, useState, useEffect, useContext } from 'react';
 import { supabaseClient } from '../services/supabase';
 import { useErrorTracker } from '../hooks/useErrorTracker';
 import { ErrorSeverity, ErrorCategory } from '../utils/errorTypes';
-import { ROUTES, getCurrentOriginUrl } from '../config/routes';
+import { ROUTES, getCurrentOriginUrl, getFullUrl } from '../config/routes';
 
 const AuthContext = createContext();
 
@@ -20,6 +20,9 @@ export function AuthProvider({ children }) {
   // Development mode detection
   const isDevelopment = window.location.hostname === 'localhost' || 
                         window.location.hostname === '127.0.0.1';
+
+  // Get site URL from environment
+  const siteUrl = import.meta.env.VITE_SITE_URL;
 
   useEffect(() => {
     console.log('[AuthProvider] Setting up auth');
@@ -199,17 +202,16 @@ export function AuthProvider({ children }) {
   async function signInWithGoogle() {
     try {
       console.log('[AuthProvider] Initiating Google sign in');
+      const redirectUrl = getFullUrl(ROUTES.AUTH_REDIRECT, siteUrl);
+      console.log('[AuthProvider] Using redirect URL:', redirectUrl);
+      
       const { data, error } = await supabaseClient.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: getCurrentOriginUrl(ROUTES.AUTH_REDIRECT),
+          redirectTo: redirectUrl,
           queryParams: {
             access_type: 'offline',
-            prompt: 'consent',
-            // Allowing multiple domains:
-            // - claygrounds.com (Sales & Marketing team)
-            // - itmagia.com (Development team)
-            // - Other domains (Investors & Partners)
+            prompt: 'consent'
           }
         }
       });
@@ -229,6 +231,7 @@ export function AuthProvider({ children }) {
         ErrorCategory.AUTH,
         {
           origin: window.location.origin,
+          siteUrl,
           isDevelopment,
           timestamp: new Date().toISOString()
         }
