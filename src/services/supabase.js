@@ -26,7 +26,10 @@ export const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     detectSessionInUrl: true,
     flowType: 'pkce',
-    site: siteUrl
+    pkce: {
+      codeChallengeMethod: 'S256'
+    },
+    redirectTo: siteUrl
   },
   // Add additional options as needed
 });

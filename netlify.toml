@@ -13,17 +13,20 @@
   NODE_VERSION = "18"
   VITE_SITE_URL = "https://partner.claygrounds.com"
 
-# Deploy Preview context
-[context.deploy-preview.environment]
+# Development branch context
+[context.development.environment]
   NODE_VERSION = "18"
-  # The DEPLOY_URL environment variable will be automatically set by Netlify
-  VITE_SITE_URL = "https://deploy-preview-${REVIEW_ID}--claygroundspartner.netlify.app"
+  VITE_SITE_URL = "https://development--claygroundspartner.netlify.app"
 
 # Branch Deploy context
 [context.branch-deploy.environment]
   NODE_VERSION = "18"
-  # We'll use the branch name in the URL for branch deploys
-  VITE_SITE_URL = "https://${BRANCH}--claygroundspartner.netlify.app"
+  VITE_SITE_URL = "https://development--claygroundspartner.netlify.app"
+
+# Deploy Preview context
+[context.deploy-preview.environment]
+  NODE_VERSION = "18"
+  VITE_SITE_URL = "https://development--claygroundspartner.netlify.app"
 
 [[redirects]]
   from = "/*"
