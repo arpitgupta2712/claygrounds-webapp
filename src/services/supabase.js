@@ -4,8 +4,8 @@ import { ROUTES, getFullUrl } from '../config/routes';
 // Get environment variables
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-const appEnv = import.meta.env.VITE_APP_ENV;
-const siteUrl = import.meta.env.VITE_SITE_URL;
+const appEnv = import.meta.env.VITE_APP_ENV || 'development';
+const siteUrl = import.meta.env.VITE_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
 
 // Enhanced debug logging for environment setup
 console.log('[SupabaseService] Environment Setup:', {
@@ -18,12 +18,14 @@ console.log('[SupabaseService] Environment Setup:', {
   redirectUrl: getFullUrl(ROUTES.AUTH_REDIRECT, siteUrl)
 });
 
-// Validate environment variables
-if (!supabaseUrl || !supabaseAnonKey || !siteUrl) {
+// Validate environment variables - only in production
+const isDevelopment = appEnv === 'development' || typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+if (!supabaseUrl || !supabaseAnonKey || (!siteUrl && !isDevelopment)) {
   const missingVars = [];
   if (!supabaseUrl) missingVars.push('VITE_SUPABASE_URL');
   if (!supabaseAnonKey) missingVars.push('VITE_SUPABASE_ANON_KEY');
-  if (!siteUrl) missingVars.push('VITE_SITE_URL');
+  if (!siteUrl && !isDevelopment) missingVars.push('VITE_SITE_URL');
   
   throw new Error(
     `Missing environment variables: ${missingVars.join(', ')}. Current environment: ${appEnv}`
