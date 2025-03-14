@@ -3,6 +3,12 @@ import { createClient } from '@supabase/supabase-js';
 // Get environment variables
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const appEnv = import.meta.env.VITE_APP_ENV;
+
+// Log environment info (will remove after testing)
+console.log(`[SupabaseService] Initializing in ${appEnv} environment`);
+console.log(`[SupabaseService] URL configured: ${supabaseUrl ? 'Yes' : 'No'}`);
+console.log(`[SupabaseService] Key configured: ${supabaseAnonKey ? 'Yes' : 'No'}`);
 
 // Validate environment variables
 if (!supabaseUrl || !supabaseAnonKey) {
