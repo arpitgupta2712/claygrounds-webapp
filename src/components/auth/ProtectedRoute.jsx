@@ -9,19 +9,19 @@ import Loading from '../common/Loading';
  * @returns {React.ReactNode} - The children or a redirect to login
  */
 function ProtectedRoute({ children }) {
-  const { user, isLoading, isDevelopment } = useAuth();
+  const { user, session, isLoading, isInitialized, isDevelopment } = useAuth();
   const location = useLocation();
   
   // Show loading while authentication state is being determined
-  if (isLoading) {
-    return <Loading message="Authenticating..." />;
+  if (!isInitialized || isLoading) {
+    return <Loading message="Authenticating..." fullScreen />;
   }
   
   // Allow access in development mode with dev-mode flag
   const isDevMode = isDevelopment && document.body.classList.contains('dev-mode');
   
   // If not authenticated, redirect to login page
-  if (!user && !isDevMode) {
+  if (!user && !session && !isDevMode) {
     console.log('[ProtectedRoute] User not authenticated, redirecting to login');
     return <Navigate to="/login" state={{ from: location }} replace />;
   }

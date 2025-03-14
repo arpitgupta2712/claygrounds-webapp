@@ -1,3 +1,4 @@
+import { useMemo, memo } from 'react';
 import PropTypes from 'prop-types';
 import { formatUtils } from '../../utils/formatUtils';
 
@@ -14,7 +15,7 @@ import { formatUtils } from '../../utils/formatUtils';
  * @param {Function} props.onClick - Click handler
  * @param {React.ReactNode} props.children - Additional content
  */
-function StatsCard({
+const StatsCard = memo(function StatsCard({
   title,
   value,
   type = 'text',
@@ -39,7 +40,7 @@ function StatsCard({
   }
 
   // Format value based on type
-  const formattedValue = (() => {
+  const formattedValue = useMemo(() => {
     switch (type) {
       case 'currency':
         return formatUtils.currency(value);
@@ -50,20 +51,20 @@ function StatsCard({
       default:
         return value;
     }
-  })();
+  }, [type, value]);
 
   // Determine card styling based on props
-  const cardClasses = `
+  const cardClasses = useMemo(() => `
     bg-white rounded-md p-7 shadow 
     transition duration-300 
     min-h-[140px] w-full
     flex flex-col justify-center items-center
     ${onClick ? 'cursor-pointer hover:-translate-y-1 hover:shadow-md' : ''}
     ${className}
-  `;
+  `, [onClick, className]);
 
   // Render trend indicator if provided
-  const renderTrend = () => {
+  const renderTrend = useMemo(() => {
     if (!trend) return null;
     
     const { value: trendValue, direction } = trend;
@@ -88,7 +89,7 @@ function StatsCard({
         <span>{trendValue}</span>
       </div>
     );
-  };
+  }, [trend]);
 
   return (
     <div 
@@ -104,12 +105,12 @@ function StatsCard({
         </div>
       </div>
       
-      {renderTrend()}
+      {renderTrend}
       
       {children && <div className="mt-2">{children}</div>}
     </div>
   );
-}
+});
 
 StatsCard.propTypes = {
   title: PropTypes.string.isRequired,

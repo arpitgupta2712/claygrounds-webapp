@@ -13,6 +13,7 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [session, setSession] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isInitialized, setIsInitialized] = useState(false);
   const { trackError } = useErrorTracker();
   
   // Development mode detection
@@ -21,48 +22,178 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     console.log('[AuthProvider] Setting up auth');
+    let authListener;
+    let isSettingUp = true;
     
     async function setupAuth() {
       try {
-        // Check for existing session
-        const { data, error } = await supabaseClient.auth.getSession();
+        console.log('[AuthProvider] Starting auth setup...');
         
-        if (error) {
-          throw error;
+        // Check for existing session
+        const { data: { session: existingSession }, error: sessionError } = await supabaseClient.auth.getSession();
+        
+        console.log('[AuthProvider] Session check result:', { 
+          hasSession: !!existingSession,
+          hasError: !!sessionError 
+        });
+        
+        if (sessionError) {
+          console.error('[AuthProvider] Session check error:', sessionError);
+          trackError(
+            sessionError,
+            'AuthProvider.setupAuth',
+            ErrorSeverity.ERROR,
+            ErrorCategory.AUTH,
+            {
+              stage: 'session_check',
+              isDevelopment,
+              timestamp: new Date().toISOString(),
+              hasExistingSession: !!existingSession
+            }
+          );
         }
         
-        setSession(data?.session || null);
-        setUser(data?.session?.user || null);
+        if (existingSession) {
+          console.log('[AuthProvider] Found existing session');
+          setSession(existingSession);
+          setUser(existingSession.user);
+        } else {
+          console.log('[AuthProvider] No existing session found');
+          setSession(null);
+          setUser(null);
+        }
         
         // Set up auth state change listener
-        const { data: authListener } = supabaseClient.auth.onAuthStateChange(
-          async (event, session) => {
-            console.log(`[AuthProvider] Auth state changed: ${event}`);
-            setSession(session);
-            setUser(session?.user || null);
+        const { data: { subscription } } = supabaseClient.auth.onAuthStateChange(
+          async (event, currentSession) => {
+            console.log(`[AuthProvider] Auth state changed: ${event}`, {
+              hasSession: !!currentSession,
+              userEmail: currentSession?.user?.email
+            });
+            
+            if (event === 'SIGNED_IN') {
+              setSession(currentSession);
+              setUser(currentSession?.user || null);
+              console.log('[AuthProvider] User signed in:', currentSession?.user?.email);
+            } else if (event === 'SIGNED_OUT') {
+              setSession(null);
+              setUser(null);
+              console.log('[AuthProvider] User signed out');
+            } else if (event === 'TOKEN_REFRESHED') {
+              setSession(currentSession);
+              console.log('[AuthProvider] Session token refreshed');
+            }
+
+            // Only track non-initial auth state changes
+            if (event !== 'INITIAL_SESSION') {
+              trackError(
+                null,
+                'AuthProvider.authStateChange',
+                ErrorSeverity.INFO,
+                ErrorCategory.AUTH,
+                {
+                  event,
+                  hasSession: !!currentSession,
+                  timestamp: new Date().toISOString(),
+                  isDevelopment,
+                  userEmail: currentSession?.user?.email || 'none'
+                }
+              );
+            }
           }
         );
         
-        return () => {
-          if (authListener?.subscription?.unsubscribe) {
-            authListener.subscription.unsubscribe();
-          }
-        };
+        authListener = subscription;
+        
+        if (isSettingUp) {
+          console.log('[AuthProvider] Auth setup complete');
+          setIsInitialized(true);
+          setIsLoading(false);
+        }
       } catch (error) {
         console.error('[AuthProvider] Error in auth setup:', error);
         trackError(
           error,
           'AuthProvider.setupAuth', 
           ErrorSeverity.ERROR,
-          ErrorCategory.AUTH
+          ErrorCategory.AUTH,
+          {
+            stage: 'initialization',
+            isDevelopment,
+            timestamp: new Date().toISOString(),
+            isInitialized: false
+          }
         );
-      } finally {
-        setIsLoading(false);
+        if (isSettingUp) {
+          setIsLoading(false);
+        }
       }
     }
     
     setupAuth();
-  }, [trackError]);
+    
+    return () => {
+      isSettingUp = false;
+      if (authListener?.unsubscribe) {
+        console.log('[AuthProvider] Cleaning up auth listener');
+        authListener.unsubscribe();
+      }
+    };
+  }, [trackError, isDevelopment]);
+  
+  // Add session refresh mechanism
+  useEffect(() => {
+    if (!session) return;
+
+    // Refresh session every 10 minutes
+    const REFRESH_INTERVAL = 10 * 60 * 1000;
+    
+    const refreshTimer = setInterval(async () => {
+      try {
+        console.log('[AuthProvider] Refreshing session');
+        const { data, error } = await supabaseClient.auth.refreshSession();
+        
+        if (error) {
+          console.error('[AuthProvider] Session refresh error:', error);
+          trackError(
+            error,
+            'AuthProvider.sessionRefresh',
+            ErrorSeverity.ERROR,
+            ErrorCategory.AUTH,
+            {
+              stage: 'refresh',
+              isDevelopment,
+              timestamp: new Date().toISOString(),
+              hasSession: !!session
+            }
+          );
+          return;
+        }
+
+        if (data?.session) {
+          console.log('[AuthProvider] Session refreshed successfully');
+          setSession(data.session);
+          setUser(data.session.user);
+        }
+      } catch (error) {
+        console.error('[AuthProvider] Session refresh error:', error);
+        trackError(
+          error,
+          'AuthProvider.sessionRefresh',
+          ErrorSeverity.ERROR,
+          ErrorCategory.AUTH,
+          {
+            stage: 'refresh',
+            isDevelopment,
+            timestamp: new Date().toISOString(),
+            hasSession: !!session
+          }
+        );
+      }
+    }, REFRESH_INTERVAL);
+
+    return () => clearInterval(refreshTimer);
+  }, [session, isDevelopment]);
   
   async function signInWithGoogle() {
     try {
@@ -70,7 +201,7 @@ export function AuthProvider({ children }) {
       const { data, error } = await supabaseClient.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: window.location.origin,
+          redirectTo: `${window.location.origin}/dashboard`,
           queryParams: {
             access_type: 'offline',
             prompt: 'consent'
@@ -191,12 +322,25 @@ export function AuthProvider({ children }) {
     user,
     session,
     isLoading,
+    isInitialized,
     signInWithGoogle,
     signOut,
     devSignIn,
     hasLocationAccess,
     isDevelopment
   };
+  
+  // Show loading state while auth is initializing
+  if (isLoading && !isInitialized) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="animate-spin h-12 w-12 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
+          <p className="text-gray-600">Initializing authentication...</p>
+        </div>
+      </div>
+    );
+  }
   
   return (
     <AuthContext.Provider value={value}>

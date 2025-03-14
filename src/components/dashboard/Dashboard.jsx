@@ -1,16 +1,18 @@
-import { useState, useEffect, useRef } from 'react';
-import { Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Routes, Route, Navigate, useLocation, useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { useBookings } from '../../hooks/useBookings';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ViewTypes } from '../../utils/constants';
+import { ErrorSeverity, ErrorCategory } from '../../utils/errorTypes';
 import { ErrorDisplay } from '../../hooks/useErrorTracker';
 import { ToastContainer } from '../../hooks/useToast';
 import { dataService } from '../../services/dataService';
-import { useErrorTracker } from '../../hooks/useErrorTracker';
-import { ErrorSeverity, ErrorCategory } from '../../utils/errorTypes';
 import ScrollToTop from '../common/ScrollToTop';
 import locations from '../../locations.json';
 import LocationReport from '../reports/LocationReport';
+import { withErrorBoundary } from '../common/ErrorBoundary';
+import { useAuth } from '../../context/AuthContext';
 
 // Components
 import Header from './Header';
@@ -42,6 +44,36 @@ function LocationReportWrapper() {
   return <LocationReport locationId={location.Location_id} locationName={location.Location_name} />;
 }
 
+function DashboardFallback({ error }) {
+  return (
+    <div className="min-h-screen p-6 bg-background-light">
+      <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-lg p-8 border-l-4 border-error">
+        <h2 className="text-2xl font-semibold text-error mb-4">Dashboard Error</h2>
+        <p className="text-gray-600 mb-4">
+          We encountered an error while loading the dashboard. Our team has been notified.
+        </p>
+        <div className="bg-error-light rounded p-4 mb-6">
+          <p className="text-error font-mono text-sm">{error?.message || 'Unknown error occurred'}</p>
+        </div>
+        <div className="flex gap-4">
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-primary text-white rounded hover:bg-primary-dark transition-colors"
+          >
+            Reload Dashboard
+          </button>
+          <a
+            href="/"
+            className="px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 transition-colors"
+          >
+            Go to Home
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /**
  * Main dashboard component
  */
@@ -53,55 +85,150 @@ function Dashboard() {
   
   const { isLoading, bookingsData, setCurrentView, currentView, selectedYear } = useApp();
   const { loadBookings } = useBookings();
+  const { handleAsync, handleError } = useErrorHandler();
+  const { session, isInitialized } = useAuth();
   const location = useLocation();
   const prevYearRef = useRef(selectedYear);
+  const [isInitializing, setIsInitializing] = useState(true);
+  const navigate = useNavigate();
 
   // Load initial data only once - globally
   useEffect(() => {
     const initializeDashboard = async () => {
-      // Only run once per app lifetime
-      if (!window.__DASHBOARD_INITIALIZED) {
+      // Only run once per app lifetime and after auth is initialized
+      if (!window.__DASHBOARD_INITIALIZED && isInitialized) {
         console.log('[Dashboard] Initializing dashboard and loading data');
         try {
           // Set global flag before async operations to prevent race conditions
           window.__DASHBOARD_INITIALIZED = true;
-          await loadBookings();
+          
+          await handleAsync(
+            async () => {
+              await loadBookings();
+            },
+            'Dashboard.initialization',
+            {
+              severity: ErrorSeverity.CRITICAL,
+              category: ErrorCategory.DATA,
+              metadata: {
+                operation: 'initialLoad',
+                year: selectedYear,
+                hasSession: !!session
+              }
+            }
+          );
+          
           console.log('[Dashboard] Initialization complete');
         } catch (error) {
-          console.error('[Dashboard] Error during initialization:', error);
+          handleError(
+            error,
+            'Dashboard.initialization',
+            ErrorSeverity.CRITICAL,
+            ErrorCategory.DATA,
+            {
+              operation: 'initialLoad',
+              year: selectedYear,
+              hasSession: !!session
+            }
+          );
+        } finally {
+          setIsInitializing(false);
         }
+      } else {
+        setIsInitializing(false);
       }
     };
     
-    // Immediate invocation with no dependencies
-    initializeDashboard();
-  }, []); // Empty dependency array - only run once
+    // Only initialize if auth is ready
+    if (isInitialized) {
+      initializeDashboard();
+    }
+  }, [isInitialized, session, selectedYear, loadBookings, handleAsync, handleError]);
   
   // React to year changes - reload data ONLY when year actually changes
   useEffect(() => {
     // Only proceed if initialization complete and year has actually changed
-    if (window.__DASHBOARD_INITIALIZED && selectedYear !== prevYearRef.current) {
+    if (window.__DASHBOARD_INITIALIZED && selectedYear !== prevYearRef.current && isInitialized) {
       console.log(`[Dashboard] Selected year changed from ${prevYearRef.current} to: ${selectedYear}, reloading data`);
       
-      // Clear any existing data cache
-      dataService.clearCache();
-      
-      // Force reload of data for the new year
-      loadBookings(selectedYear, true);
-      
-      // Update the ref to the new year
-      prevYearRef.current = selectedYear;
+      const reloadData = async () => {
+        try {
+          // Clear any existing data cache
+          dataService.clearCache();
+          
+          // Force reload of data for the new year
+          await handleAsync(
+            async () => {
+              await loadBookings(selectedYear, true);
+            },
+            'Dashboard.yearChange',
+            {
+              severity: ErrorSeverity.ERROR,
+              category: ErrorCategory.DATA,
+              metadata: {
+                operation: 'yearChange',
+                previousYear: prevYearRef.current,
+                newYear: selectedYear,
+                hasSession: !!session
+              }
+            }
+          );
+          
+          // Update the ref to the new year
+          prevYearRef.current = selectedYear;
+        } catch (error) {
+          handleError(
+            error,
+            'Dashboard.yearChange',
+            ErrorSeverity.ERROR,
+            ErrorCategory.DATA,
+            {
+              operation: 'yearChange',
+              previousYear: prevYearRef.current,
+              newYear: selectedYear,
+              hasSession: !!session
+            }
+          );
+        }
+      };
+
+      reloadData();
     }
-  }, [selectedYear, loadBookings]);
-  
-  // Handle view changes from routes - completely separated from initialization
-  const handleViewChange = (view) => {
-    // Only update if the view is different from current and valid
-    if (view && typeof view === 'string' && view !== currentView) {
-      console.log(`[Dashboard] Changing view to: ${view}`);
-      setCurrentView(view);
-    }
-  };
+  }, [selectedYear, loadBookings, handleAsync, handleError, isInitialized, session]);
+
+  // Show loading state during initialization
+  if (isInitializing || !isInitialized) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="animate-spin h-12 w-12 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
+          <p className="text-gray-600">
+            {isInitialized ? 'Initializing dashboard...' : 'Initializing authentication...'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show authentication required message if not authenticated
+  if (!session && !document.body.classList.contains('dev-mode')) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center max-w-md p-8 bg-white rounded-lg shadow-lg">
+          <h2 className="text-2xl font-semibold text-gray-800 mb-4">Authentication Required</h2>
+          <p className="text-gray-600 mb-6">
+            Please sign in to access the dashboard.
+          </p>
+          <button
+            onClick={() => navigate('/login')}
+            className="px-6 py-2 bg-primary text-white rounded hover:bg-primary-dark transition-colors"
+          >
+            Sign In
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -118,7 +245,7 @@ function Dashboard() {
       <main className="flex-grow p-4 md:p-6 lg:p-10 w-full">
         <div className="mx-auto w-[90%] bg-white rounded-lg shadow-md p-4 md:p-6 lg:p-10">
           {/* Navigation */}
-          <Navigation onViewChange={handleViewChange} />
+          <Navigation />
           
           {/* Filter Controls */}
           <FilterControls />
@@ -136,7 +263,14 @@ function Dashboard() {
               <Route path="source" element={<CategoryView type="source" />} />
               <Route path="payments" element={<PaymentsView />} />
               <Route path="reports/:facilityId" element={<LocationReportWrapper />} />
-              <Route path="*" element={<Navigate to="table" replace />} />
+              <Route index element={<Navigate to="table" replace />} />
+              <Route path="*" element={
+                <EmptyState 
+                  title="Page Not Found" 
+                  message="The page you are looking for does not exist."
+                  icon="error"
+                />
+              } />
             </Routes>
           ) : (
             <EmptyState 
@@ -158,4 +292,12 @@ function Dashboard() {
   );
 }
 
-export default Dashboard;
+// Wrap Dashboard with error boundary
+export default withErrorBoundary(Dashboard, {
+  fallback: DashboardFallback,
+  context: 'Dashboard',
+  metadata: {
+    feature: 'dashboard',
+    importance: 'critical'
+  }
+});

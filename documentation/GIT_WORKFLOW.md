@@ -1,4 +1,3 @@
-
 ## Complete Git Workflow Steps
 
 ### First Time Setup on a System
@@ -176,6 +175,55 @@ git merge development
 # Push to main (this will trigger Netlify deployment)
 git push origin main
 ```
+
+### Working Directly on Development Branch (Alternative Workflow)
+
+If you choose to work directly on the development branch instead of creating feature branches, follow these steps:
+
+1. Before starting work:
+```bash
+# Make sure you're on the development branch
+git checkout development
+
+# Get the latest changes
+git pull origin development
+
+# Install or update dependencies if package.json changed
+npm install
+```
+
+2. While working:
+```bash
+# Periodically commit your changes
+git add .
+git commit -m "Descriptive message about changes"
+
+# Push changes to development
+git push origin development
+```
+
+3. Stay in sync with development:
+```bash
+# Before making new changes, always pull latest
+git pull origin development
+```
+
+4. Before closing work:
+```bash
+# Make sure all changes are committed
+git add .
+git commit -m "Your final changes"
+
+# Push to development
+git push origin development
+```
+
+⚠️ **Important Notes:**
+- This approach is simpler but less flexible than using feature branches
+- Only recommended for small, isolated changes
+- Not recommended when multiple developers are working on the same features
+- May lead to more conflicts if multiple developers work on the same branch
+- Consider using feature branches for larger changes or when working with other developers
 
 ## Best Practices Summary
 

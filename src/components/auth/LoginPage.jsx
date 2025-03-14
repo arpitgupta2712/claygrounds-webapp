@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useErrorTracker } from '../../hooks/useErrorTracker';
 import { ErrorSeverity, ErrorCategory } from '../../utils/errorTypes';
+import Loading from '../common/Loading';
 
 /**
  * Login page component with Google Sign-In
@@ -10,14 +11,19 @@ import { ErrorSeverity, ErrorCategory } from '../../utils/errorTypes';
 function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
-  const { user, signInWithGoogle, devSignIn, isDevelopment } = useAuth();
+  const { user, session, signInWithGoogle, devSignIn, isDevelopment } = useAuth();
   const { trackError } = useErrorTracker();
   const navigate = useNavigate();
+  const location = useLocation();
 
-  // If already logged in, redirect to dashboard
-  if (user) {
-    return <Navigate to="/dashboard" replace />;
-  }
+  // If already logged in, redirect to dashboard or the page they came from
+  useEffect(() => {
+    if (user || session) {
+      const from = location.state?.from?.pathname || '/dashboard';
+      console.log('[LoginPage] User authenticated, redirecting to:', from);
+      navigate(from, { replace: true });
+    }
+  }, [user, session, navigate, location]);
 
   /**
    * Handle Google sign in
@@ -30,7 +36,7 @@ function LoginPage() {
       console.log('[LoginPage] Starting Google sign-in process');
       await signInWithGoogle();
       
-      // Navigation handled by auth state change in useEffect
+      // Navigation handled by useEffect above
     } catch (error) {
       console.error('[LoginPage] Google sign-in error:', error);
       setError('Error signing in with Google. Please try again.');
@@ -50,6 +56,11 @@ function LoginPage() {
    * Handle development mode login
    */
   const handleDevLogin = async () => {
+    if (!isDevelopment) {
+      console.warn('[LoginPage] Development login attempted in production');
+      return;
+    }
+    
     try {
       setIsLoading(true);
       setError(null);
@@ -57,8 +68,9 @@ function LoginPage() {
       console.log('[LoginPage] Starting development mode login');
       const result = await devSignIn();
       
-      if (result) {
-        navigate('/dashboard');
+      if (result?.user) {
+        const from = location.state?.from?.pathname || '/dashboard';
+        navigate(from, { replace: true });
       }
     } catch (error) {
       console.error('[LoginPage] Development login error:', error);
@@ -74,6 +86,11 @@ function LoginPage() {
       setIsLoading(false);
     }
   };
+
+  // Show loading state while checking authentication
+  if (isLoading) {
+    return <Loading message="Signing in..." fullScreen />;
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background-light bg-gradient-to-br from-background-light to-gray-200 p-4">
