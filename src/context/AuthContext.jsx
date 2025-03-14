@@ -2,6 +2,7 @@ import { createContext, useState, useEffect, useContext } from 'react';
 import { supabaseClient } from '../services/supabase';
 import { useErrorTracker } from '../hooks/useErrorTracker';
 import { ErrorSeverity, ErrorCategory } from '../utils/errorTypes';
+import { ROUTES, getCurrentOriginUrl } from '../config/routes';
 
 const AuthContext = createContext();
 
@@ -201,15 +202,20 @@ export function AuthProvider({ children }) {
       const { data, error } = await supabaseClient.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/dashboard`,
+          redirectTo: getCurrentOriginUrl(ROUTES.AUTH_REDIRECT),
           queryParams: {
             access_type: 'offline',
-            prompt: 'consent'
+            prompt: 'consent',
+            hd: 'claygrounds.com'  // Optional: restrict to your domain
           }
         }
       });
       
-      if (error) throw error;
+      if (error) {
+        console.error('[AuthProvider] Google sign in error:', error);
+        throw error;
+      }
+      console.log('[AuthProvider] Sign in initiated:', data);
       return data;
     } catch (error) {
       console.error('[AuthProvider] Google sign in error:', error);
@@ -217,7 +223,12 @@ export function AuthProvider({ children }) {
         error,
         'AuthProvider.signInWithGoogle', 
         ErrorSeverity.ERROR,
-        ErrorCategory.AUTH
+        ErrorCategory.AUTH,
+        {
+          origin: window.location.origin,
+          isDevelopment,
+          timestamp: new Date().toISOString()
+        }
       );
       throw error;
     }

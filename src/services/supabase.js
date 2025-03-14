@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { ROUTES, getFullUrl } from '../config/routes';
 
 // Get environment variables
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -29,10 +30,21 @@ export const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
     pkce: {
       codeChallengeMethod: 'S256'
     },
-    redirectTo: siteUrl
+    storage: window.localStorage,
+    storageKey: 'supabase-auth-token',
+    debug: true,  // Enable debug logs
+    redirectTo: getFullUrl(ROUTES.AUTH_REDIRECT, siteUrl)
   },
   // Add additional options as needed
+  persistSession: true,
+  detectSessionInUrl: true,
+  headers: {
+    'X-Client-Info': 'claygrounds-webapp'
+  }
 });
+
+// Log additional debug info
+console.log('[SupabaseService] Client configured with redirectTo:', getFullUrl(ROUTES.AUTH_REDIRECT, siteUrl));
 
 /**
  * Fetch protected CSV from Supabase
