@@ -70,10 +70,11 @@ export async function fetchProtectedCSV(fileName) {
 
     // Download file from Supabase Storage
     const { data, error } = await supabaseClient.storage
-      .from('bookings')
+      .from('protected-csvs')
       .download(fileName);
 
     if (error) {
+      console.error('[SupabaseService] Storage error:', error);
       throw error;
     }
 
