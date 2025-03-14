@@ -2,8 +2,8 @@ import { createClient } from '@supabase/supabase-js';
 import { ROUTES, getFullUrl } from '../config/routes';
 
 // Get environment variables
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
 const appEnv = import.meta.env.VITE_APP_ENV || 'development';
 const siteUrl = import.meta.env.VITE_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
 
@@ -15,6 +15,7 @@ console.log('[SupabaseService] Environment Setup:', {
   supabaseUrlLength: supabaseUrl?.length,
   hasAnonKey: !!supabaseAnonKey,
   anonKeyLength: supabaseAnonKey?.length,
+  supabaseUrl: supabaseUrl ? `${supabaseUrl.substring(0, 8)}...` : null, // Show first 8 chars only
   redirectUrl: getFullUrl(ROUTES.AUTH_REDIRECT, siteUrl)
 });
 
@@ -32,6 +33,18 @@ if (!supabaseUrl || !supabaseAnonKey || (!siteUrl && !isDevelopment)) {
   );
 }
 
+// Validate Supabase URL format
+try {
+  new URL(supabaseUrl);
+} catch (error) {
+  throw new Error(`Invalid VITE_SUPABASE_URL format: ${supabaseUrl}`);
+}
+
+// Validate Supabase key format (should be a JWT)
+if (!supabaseAnonKey.includes('.')) {
+  throw new Error('Invalid VITE_SUPABASE_ANON_KEY format: Should be a JWT token');
+}
+
 // Initialize Supabase client with enhanced configuration
 export const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
@@ -41,11 +54,11 @@ export const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
     flowType: 'pkce',
     pkce: {
       codeChallengeMethod: 'S256',
-      codeChallengeInHeader: true // Add PKCE challenge in header
+      codeChallengeInHeader: true
     },
     storage: window.localStorage,
     storageKey: 'supabase-auth-token',
-    debug: true,
+    debug: isDevelopment,
     redirectTo: getFullUrl(ROUTES.AUTH_REDIRECT, siteUrl),
     onAuthStateChange: (event, session) => {
       console.log('[SupabaseService] Auth State Change:', {
@@ -55,7 +68,6 @@ export const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
         timestamp: new Date().toISOString()
       });
     },
-    // Add global error handler
     onError: (error) => {
       console.error('[SupabaseService] Auth Error:', {
         message: error.message,
@@ -70,12 +82,6 @@ export const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
   headers: {
     'X-Client-Info': 'claygrounds-webapp',
     'X-Environment': appEnv
-  },
-  // Add global error handler
-  global: {
-    headers: {
-      'X-Client-Info': `claygrounds-webapp-${appEnv}`
-    }
   }
 });
 
