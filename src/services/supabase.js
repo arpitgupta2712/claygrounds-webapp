@@ -4,16 +4,18 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const appEnv = import.meta.env.VITE_APP_ENV;
+const siteUrl = import.meta.env.VITE_SITE_URL;
 
 // Log environment info (will remove after testing)
 console.log(`[SupabaseService] Initializing in ${appEnv} environment (Deploy Preview Test)`);
 console.log(`[SupabaseService] URL configured: ${supabaseUrl ? 'Yes' : 'No'}`);
 console.log(`[SupabaseService] Key configured: ${supabaseAnonKey ? 'Yes' : 'No'}`);
+console.log(`[SupabaseService] Site URL: ${siteUrl}`);
 
 // Validate environment variables
-if (!supabaseUrl || !supabaseAnonKey) {
+if (!supabaseUrl || !supabaseAnonKey || !siteUrl) {
   throw new Error(
-    'Missing Supabase environment variables. Please check your .env file and ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set.'
+    'Missing environment variables. Please check your .env file and ensure VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, and VITE_SITE_URL are set.'
   );
 }
 
@@ -22,7 +24,9 @@ export const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: true
+    detectSessionInUrl: true,
+    flowType: 'pkce',
+    site: siteUrl
   },
   // Add additional options as needed
 });

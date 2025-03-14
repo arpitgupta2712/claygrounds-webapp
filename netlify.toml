@@ -10,15 +10,24 @@
 
 # Production context
 [context.production]
-  environment = { NODE_VERSION = "18" }
+  environment = { 
+    NODE_VERSION = "18"
+    VITE_SITE_URL = "https://partner.claygrounds.com"
+  }
 
 # Deploy Preview context
 [context.deploy-preview]
-  environment = { NODE_VERSION = "18" }
+  environment = { 
+    NODE_VERSION = "18"
+    VITE_SITE_URL = "https://feature-api-key-security--claygroundspartner.netlify.app"
+  }
 
 # Branch Deploy context
 [context.branch-deploy]
-  environment = { NODE_VERSION = "18" }
+  environment = { 
+    NODE_VERSION = "18"
+    VITE_SITE_URL = "https://feature-api-key-security--claygroundspartner.netlify.app"
+  }
 
 [[redirects]]
   from = "/*"
