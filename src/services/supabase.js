@@ -3,64 +3,56 @@ import { logger } from '../utils/logger';
 import { ErrorCategory, ErrorSeverity } from '../utils/errorTypes';
 import { ROUTES, getFullUrl } from '../config/routes';
 
-// Get environment variables and clean them
+// Enhanced environment detection
+const getEnvironmentInfo = () => {
+  const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+  const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
+  const isNetlifyPreview = hostname.includes('netlify.app');
+  
+  return {
+    isDevelopment: isLocalhost || isNetlifyPreview || import.meta.env.VITE_APP_ENV === 'development',
+    isProduction: !isLocalhost && !isNetlifyPreview && import.meta.env.VITE_APP_ENV === 'production',
+    hostname,
+    origin: typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'
+  };
+};
+
+const env = getEnvironmentInfo();
+
+// Get and validate environment variables
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
-const appEnv = import.meta.env.VITE_APP_ENV || 'development';
-const siteUrl = import.meta.env.VITE_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
+const configuredSiteUrl = import.meta.env.VITE_SITE_URL?.trim();
 
-// Debug: Log key format and first few characters
-console.log('[SupabaseService] Key Format Check:', {
-  keyParts: supabaseAnonKey?.split('.').length || 0,
-  keyLength: supabaseAnonKey?.length || 0,
-  isValidJWT: supabaseAnonKey?.split('.').length === 3,
-  keyStart: supabaseAnonKey?.substring(0, 5) + '...',
-  keyEnd: '...' + supabaseAnonKey?.substring(supabaseAnonKey.length - 5)
+// Use window.location.origin for preview/development, configured URL for production
+const siteUrl = env.isProduction ? configuredSiteUrl : env.origin;
+
+// Debug logging for environment setup
+logger.debug(ErrorCategory.AUTH, 'Supabase Environment Setup', {
+  environment: env.isDevelopment ? 'development' : 'production',
+  hostname: env.hostname,
+  isLocalhost: env.hostname === 'localhost',
+  isNetlifyPreview: env.hostname.includes('netlify.app'),
+  configuredSiteUrl,
+  actualSiteUrl: siteUrl,
+  origin: env.origin
 });
 
-// Always use current window location for redirect in auth flow
-const currentUrl = window.location.origin;
-const redirectUrl = getFullUrl(ROUTES.AUTH_REDIRECT, currentUrl);
+// Always use current origin for redirect in auth flow
+const redirectUrl = getFullUrl(ROUTES.AUTH_REDIRECT, siteUrl);
 
-// Enhanced debug logging for environment setup
-console.log('[SupabaseService] Environment Setup:', {
-  environment: appEnv,
-  configuredSiteUrl: siteUrl,
-  currentOrigin: currentUrl,
-  actualRedirectUrl: redirectUrl,
-  hasSupabaseUrl: !!supabaseUrl,
-  supabaseUrlLength: supabaseUrl?.length,
-  hasAnonKey: !!supabaseAnonKey,
-  anonKeyLength: supabaseAnonKey?.length
-});
-
-// Validate environment variables - only in production
-const isDevelopment = appEnv === 'development' || typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-
-if (!supabaseUrl || !supabaseAnonKey || (!siteUrl && !isDevelopment)) {
+// Validate environment variables
+if (!supabaseUrl || !supabaseAnonKey) {
   const missingVars = [];
   if (!supabaseUrl) missingVars.push('VITE_SUPABASE_URL');
   if (!supabaseAnonKey) missingVars.push('VITE_SUPABASE_ANON_KEY');
-  if (!siteUrl && !isDevelopment) missingVars.push('VITE_SITE_URL');
   
   throw new Error(
-    `Missing environment variables: ${missingVars.join(', ')}. Current environment: ${appEnv}`
+    `Missing required environment variables: ${missingVars.join(', ')}`
   );
 }
 
-// Validate Supabase URL format
-try {
-  new URL(supabaseUrl);
-} catch (error) {
-  throw new Error(`Invalid VITE_SUPABASE_URL format: ${supabaseUrl}`);
-}
-
-// Validate Supabase key format (should be a JWT)
-if (!supabaseAnonKey.includes('.') || supabaseAnonKey.split('.').length !== 3) {
-  throw new Error('Invalid VITE_SUPABASE_ANON_KEY format: Should be a valid JWT token with 3 parts');
-}
-
-// Initialize Supabase client with enhanced configuration
+// Initialize Supabase client with environment-aware configuration
 export const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
@@ -71,18 +63,27 @@ export const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
       codeChallengeMethod: 'S256',
       codeChallengeInHeader: true
     },
-    storage: window.localStorage,
+    storage: typeof window !== 'undefined' ? window.localStorage : null,
     storageKey: 'supabase-auth-token',
-    debug: true, // Enable debug for all environments temporarily
-    redirectTo: redirectUrl // Always use current origin for redirect
+    debug: env.isDevelopment, // Only enable debug in development
+    redirectTo: redirectUrl
   },
   global: {
     headers: {
       'X-Client-Info': 'claygrounds-webapp',
-      'X-Environment': appEnv,
-      'X-Origin': window.location.origin
+      'X-Environment': env.isDevelopment ? 'development' : 'production',
+      'X-Origin': env.origin
     }
   }
+});
+
+// Log initialization details
+logger.info(ErrorCategory.AUTH, 'Supabase Client Initialized', {
+  timestamp: new Date().toISOString(),
+  environment: env.isDevelopment ? 'development' : 'production',
+  redirectUrl,
+  origin: env.origin,
+  isProduction: env.isProduction
 });
 
 // Verify the client is working with role check
@@ -112,14 +113,6 @@ export const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
     console.error('[SupabaseService] Error during initial session check:', err);
   }
 })();
-
-// Log client initialization
-console.log('[SupabaseService] Client Initialized:', {
-  timestamp: new Date().toISOString(),
-  environment: appEnv,
-  redirectUrl: redirectUrl,
-  origin: window.location.origin
-});
 
 // Disable Supabase's internal debug logs in production
 if (process.env.NODE_ENV === 'production') {
