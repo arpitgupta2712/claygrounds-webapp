@@ -7,6 +7,9 @@
   # Common settings for all environments
   VITE_ENABLE_MOCK_DATA = "false"
   VITE_ENABLE_DEBUG_LOGGING = "false"
+  # Supabase settings (will be overridden by Netlify UI variables)
+  VITE_SUPABASE_URL = "${VITE_SUPABASE_URL}"
+  VITE_SUPABASE_ANON_KEY = "${VITE_SUPABASE_ANON_KEY}"
 
 # Production context
 [context.production.environment]
@@ -15,6 +18,8 @@
   VITE_SITE_URL = "https://partner.claygrounds.com"
   VITE_ENABLE_MOCK_DATA = "false"
   VITE_ENABLE_DEBUG_LOGGING = "false"
+  VITE_SUPABASE_URL = "${VITE_SUPABASE_URL}"
+  VITE_SUPABASE_ANON_KEY = "${VITE_SUPABASE_ANON_KEY}"
 
 # Development branch context
 [context.development.environment]
@@ -23,6 +28,8 @@
   VITE_SITE_URL = "https://development--claygroundspartner.netlify.app"
   VITE_ENABLE_MOCK_DATA = "false"
   VITE_ENABLE_DEBUG_LOGGING = "true"
+  VITE_SUPABASE_URL = "${VITE_SUPABASE_URL}"
+  VITE_SUPABASE_ANON_KEY = "${VITE_SUPABASE_ANON_KEY}"
 
 # Branch Deploy context
 [context.branch-deploy.environment]
@@ -31,6 +38,8 @@
   VITE_SITE_URL = "https://development--claygroundspartner.netlify.app"
   VITE_ENABLE_MOCK_DATA = "false"
   VITE_ENABLE_DEBUG_LOGGING = "true"
+  VITE_SUPABASE_URL = "${VITE_SUPABASE_URL}"
+  VITE_SUPABASE_ANON_KEY = "${VITE_SUPABASE_ANON_KEY}"
 
 # Deploy Preview context
 [context.deploy-preview.environment]
@@ -39,6 +48,8 @@
   VITE_SITE_URL = "https://development--claygroundspartner.netlify.app"
   VITE_ENABLE_MOCK_DATA = "false"
   VITE_ENABLE_DEBUG_LOGGING = "true"
+  VITE_SUPABASE_URL = "${VITE_SUPABASE_URL}"
+  VITE_SUPABASE_ANON_KEY = "${VITE_SUPABASE_ANON_KEY}"
 
 [[redirects]]
   from = "/*"
