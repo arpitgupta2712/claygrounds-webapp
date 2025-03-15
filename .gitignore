@@ -49,3 +49,6 @@ lerna-debug.log*
 dist
 dist-ssr
 *.local
+
+# Local Netlify folder
+.netlify
