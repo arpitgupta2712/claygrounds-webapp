@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useErrorTracker } from './useErrorTracker';
@@ -18,6 +18,7 @@ export const useBookings = () => {
   const [groupedData, setGroupedData] = useState({});
   const { trackError } = useErrorTracker();
   const { session, isInitialized } = useAuth();
+  const loadingRef = useRef(false);
   
   const {
     bookingsData, filteredData, sortField, sortDirection, 
@@ -98,16 +99,19 @@ export const useBookings = () => {
    * @param {boolean} forceRefresh - Force refresh data
    */
   const loadBookings = useCallback(async (year, forceRefresh = false) => {
-    // Skip if already loading
-    if (isLoading) {
+    // Prevent concurrent loads
+    if (loadingRef.current) {
+      console.debug('[useBookings] Already loading, skipping...');
       return;
     }
 
     // Skip if we already have data and no force refresh
     if (!forceRefresh && bookingsData?.length > 0 && year === selectedYear) {
+      console.debug('[useBookings] Using existing data for year:', year);
       return;
     }
     
+    loadingRef.current = true;
     setIsLoading(true);
     setError(null);
     
@@ -141,7 +145,6 @@ export const useBookings = () => {
       
       // Group the data by default categories (only if data changed)
       if (bookings !== bookingsData) {
-        // Use Promise.all to parallelize grouping operations
         await Promise.all([
           groupData('locations', bookings),
           groupData('months', bookings),
@@ -161,10 +164,19 @@ export const useBookings = () => {
           message: error.message || 'Failed to load booking data. Please try again.'
         }
       });
+      
+      trackError(
+        error,
+        'useBookings.loadBookings',
+        ErrorSeverity.ERROR,
+        ErrorCategory.DATA,
+        { year, forceRefresh }
+      );
     } finally {
+      loadingRef.current = false;
       setIsLoading(false);
     }
-  }, [isLoading, bookingsData, selectedYear, batchUpdate, groupData]);
+  }, [bookingsData, selectedYear, batchUpdate, groupData, trackError]);
   
   /**
    * Apply filtering to booking data
@@ -312,13 +324,28 @@ export const useBookings = () => {
 
   // Auto-load data when selectedYear changes or user logs in
   useEffect(() => {
-    if ((session || document.body.classList.contains('dev-mode')) && isInitialized && selectedYear) {
+    let mounted = true;
+    let timeoutId;
+
+    const loadData = async () => {
+      if (!mounted || !selectedYear || loadingRef.current) return;
+      
       // Add a small delay to prevent rapid consecutive loads
-      const timeoutId = setTimeout(() => {
-        loadBookings(selectedYear);
+      timeoutId = setTimeout(async () => {
+        if (mounted && (session || document.body.classList.contains('dev-mode')) && isInitialized) {
+          await loadBookings(selectedYear);
+        }
       }, 100);
-      return () => clearTimeout(timeoutId);
-    }
+    };
+
+    loadData();
+
+    return () => {
+      mounted = false;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
   }, [selectedYear, session, isInitialized, loadBookings]);
   
   return {

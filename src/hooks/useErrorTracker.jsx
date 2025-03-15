@@ -1,10 +1,11 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { ErrorSeverity, ErrorCategory } from '../utils/errorTypes';
 import { createPortal } from 'react-dom';
 import { useToast } from './useToast';
 
 // Global error store with enhanced functionality
 const errorStore = {
+  isInitialized: false,  // Add initialization flag
   errors: [],
   maxErrors: 50,
   consoleLogging: true,
@@ -92,11 +93,19 @@ const errorStore = {
   },
   
   init(options = {}) {
+    // Only initialize once
+    if (this.isInitialized) {
+      console.debug('[ErrorTracker] Already initialized, skipping...');
+      return;
+    }
+    
     console.log('[ErrorTracker] Initializing with options:', options);
     
     if (options.maxErrors !== undefined) this.maxErrors = options.maxErrors;
     if (options.consoleLogging !== undefined) this.consoleLogging = options.consoleLogging;
     if (options.criticalErrorCallback) this.criticalErrorCallback = options.criticalErrorCallback;
+    
+    this.isInitialized = true;
   },
 
   // New method to subscribe to error updates
@@ -294,7 +303,7 @@ export function useErrorTracker() {
   const [visibleError, setVisibleError] = useState(null);
   const { showToast } = useToast();
   
-  // Handle error display
+  // Memoize the display error callback
   const displayError = useCallback((errorInfo) => {
     if (errorInfo.severity === ErrorSeverity.INFO) {
       showToast(errorInfo.message, 'info');
@@ -306,13 +315,15 @@ export function useErrorTracker() {
       // Auto-dismiss after 8 seconds for non-critical errors
       if (errorInfo.severity !== ErrorSeverity.CRITICAL) {
         setTimeout(() => {
-          setVisibleError(null);
+          setVisibleError((current) => 
+            current?.id === errorInfo.id ? null : current
+          );
         }, 8000);
       }
     }
   }, [showToast]);
   
-  // Track error function
+  // Memoize the track error function
   const trackError = useCallback((error, context, severity, category, metadata = {}) => {
     const errorInfo = trackErrorGlobal(error, context, severity, category, metadata);
     
@@ -324,12 +335,12 @@ export function useErrorTracker() {
     return errorInfo;
   }, [displayError]);
   
-  // Cleanup handler
+  // Memoize the close error handler
   const closeError = useCallback(() => {
     setVisibleError(null);
   }, []);
   
-  // Initialize error tracker on mount
+  // Initialize error tracker on mount only once
   useEffect(() => {
     errorStore.init({
       maxErrors: 100,
@@ -345,16 +356,19 @@ export function useErrorTracker() {
         });
       }
     });
-  }, [displayError]);
-  
-  return { 
+  }, []); // Empty dependency array ensures single initialization
+
+  // Memoize the return value to prevent unnecessary re-renders
+  const errorTrackerValue = useMemo(() => ({
     trackError,
     errors: errorStore.errors,
     errorAggregates: Array.from(errorStore.errorAggregates.values()),
     visibleError,
     closeError,
     subscribe: errorStore.subscribe.bind(errorStore)
-  };
+  }), [trackError, visibleError, closeError]);
+  
+  return errorTrackerValue;
 }
 
 // Error component to render
