@@ -24,16 +24,47 @@ function validateConfig() {
       errors.push('VITE_SUPABASE_ANON_KEY is not in valid JWT format');
     }
     
-    // Check if key is truncated (comparing with known length)
-    const expectedLength = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBwZHlubGp5bHFtYmtreWpjYXBkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDAwNzMyMzgsImV4cCI6MjA1NTY0OTIzOH0.99PUtn0VHw6kwTY8cx_UNfCPal-vJwoIlAG2njqbE4A'.length;
-    if (supabaseAnonKey.length !== expectedLength) {
-      errors.push(`VITE_SUPABASE_ANON_KEY appears to be truncated. Expected length: ${expectedLength}, got: ${supabaseAnonKey.length}`);
+    // The correct key we expect
+    const correctKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBwZHlubGp5bHFtYmtreWpjYXBkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDAwNzMyMzgsImV4cCI6MjA1NTY0OTIzOH0.99PUtn0VHw6kwTY8cx_UNfCPal-vJwoIlAG2njqbE4A';
+    
+    if (supabaseAnonKey !== correctKey) {
+      // Log the differences to help debug
+      logger.error(ErrorCategory.AUTH, 'Key mismatch', {
+        expectedLength: correctKey.length,
+        actualLength: supabaseAnonKey.length,
+        firstDifference: findFirstDifference(correctKey, supabaseAnonKey),
+        keyStart: supabaseAnonKey.substring(0, 20) + '...',
+        keyEnd: '...' + supabaseAnonKey.substring(supabaseAnonKey.length - 20)
+      });
+      
+      errors.push(`VITE_SUPABASE_ANON_KEY is incorrect or truncated. Expected length: ${correctKey.length}, got: ${supabaseAnonKey.length}`);
     }
   }
   
   if (errors.length > 0) {
     throw new Error('Supabase configuration errors:\n' + errors.join('\n'));
   }
+}
+
+// Helper function to find where two strings first differ
+function findFirstDifference(str1, str2) {
+  const minLength = Math.min(str1.length, str2.length);
+  for (let i = 0; i < minLength; i++) {
+    if (str1[i] !== str2[i]) {
+      return {
+        position: i,
+        expected: str1[i],
+        actual: str2[i],
+        context: str1.substring(Math.max(0, i-10), Math.min(str1.length, i+10))
+      };
+    }
+  }
+  return str1.length === str2.length ? null : {
+    position: minLength,
+    truncated: true,
+    expectedLength: str1.length,
+    actualLength: str2.length
+  };
 }
 
 // Validate before proceeding
