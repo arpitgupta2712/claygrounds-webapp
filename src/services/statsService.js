@@ -4,6 +4,7 @@ import { groupingService } from './groupingService';
 
 // Cache for statistics calculations
 const statsCache = new Map();
+const locationStatsCache = new Map();
 
 /**
  * Service for statistical calculations and data analysis
@@ -234,71 +235,51 @@ export const statsService = {
         completionRate: this.calculateCompletionRate(categoryData)
       };
       
-      // Add payment mode distribution
-      const paymentModes = groupingService.groupByPaymentMode(categoryData);
-      
-      // Helper function to safely parse currency values
-      const getCurrencyValueSum = (fieldName) => {
-        return categoryData.reduce((total, booking) => {
-          // Get the value from the booking
-          const value = booking[fieldName];
-          
-          // Skip undefined, null or empty values
-          if (value === undefined || value === null || value === '') {
-            return total;
-          }
-          
-          // Parse the value - remove currency symbols and commas
-          const sanitized = typeof value === 'string' 
-                            ? value.replace(/[₹,]/g, '').trim()
-                            : String(value);
-          
-          // Convert to number and add to total (handle NaN)
-          const numericValue = parseFloat(sanitized);
-          return total + (isNaN(numericValue) ? 0 : numericValue);
-        }, 0);
-      };
-      
-      // Calculate payment amounts directly
-      stats.paymentDistribution = {
-        cash: getCurrencyValueSum('Cash'),
-        bank: getCurrencyValueSum('UPI') + getCurrencyValueSum('Bank Transfer'),
-        hudle: getCurrencyValueSum('Hudle App') + 
-               getCurrencyValueSum('Hudle QR') + 
-               getCurrencyValueSum('Hudle Wallet') + 
-               getCurrencyValueSum('Venue Wallet') + 
-               getCurrencyValueSum('Hudle Pass') + 
-               getCurrencyValueSum('Hudle Discount')
-      };
-      
-      // Add any extra stats defined in the config
-      if (config.extraStats) {
-        // Process all extra stats in parallel
-        const extraStatsPromises = config.extraStats.map(async stat => {
+      // Process extra stats in parallel for better performance
+      if (config.extraStats && config.extraStats.length > 0) {
+        console.debug(`[StatsService] Processing ${config.extraStats.length} extra stats`);
+        
+        // Calculate extra stats and add to stats object
+        const extraStatsPromises = config.extraStats.map(async (extraStat) => {
           try {
-            const value = await stat.calculate(categoryData);
-            return [stat.label, value];
+            const { label, calculate } = extraStat;
+            console.debug(`[StatsService] Calculating extra stat: ${label}`);
+            
+            // Calculate the extra stat value
+            const value = await Promise.resolve(calculate(categoryData));
+            
+            // Important: For consistency, store the result exactly as returned
+            // Do not modify complex objects, preserve their structure
+            return { label, value };
           } catch (error) {
-            console.error(`[StatsService] Error calculating ${stat.label}:`, error);
-            return [stat.label, null];
+            console.error(`[StatsService] Error calculating extra stat ${extraStat.label}:`, error);
+            return { label: extraStat.label, value: 'Error' };
           }
         });
-
+        
         // Wait for all extra stats to be calculated
         const extraStatsResults = await Promise.all(extraStatsPromises);
         
-        // Add successful calculations to stats
-        extraStatsResults.forEach(([label, value]) => {
-          if (value !== null) {
-            stats[label] = value;
-          }
+        // Add extra stats to stats object, preserving complex objects
+        extraStatsResults.forEach(({ label, value }) => {
+          stats[label] = value;
         });
       }
+      
+      // Include stats collected by payment mode
+      const paymentModes = groupingService.groupByPaymentMode(categoryData);
+      stats.paymentModes = paymentModes;
+      
+      // Add stats about sport distribution
+      stats.sportDistribution = this.calculateSportDistribution(categoryData);
+      
+      // Add stats about status distribution
+      stats.statusDistribution = this.calculateStatusDistribution(categoryData);
       
       return stats;
     } catch (error) {
       console.error(`[StatsService] Error calculating category stats: ${error.message}`);
-      throw new Error(`Failed to calculate category statistics: ${error.message}`);
+      throw error;
     }
   },
 
@@ -586,6 +567,13 @@ export const statsService = {
    */
   async getLocationStats(locationId) {
     try {
+      // Check cache first
+      const cacheKey = `location_${locationId}`;
+      if (locationStatsCache.has(cacheKey)) {
+        console.debug(`[StatsService] Using cached stats for location: ${locationId}`);
+        return locationStatsCache.get(cacheKey);
+      }
+
       console.debug(`[StatsService] Fetching statistics for location: ${locationId}`);
       
       // Check if data is ready globally
@@ -598,10 +586,6 @@ export const statsService = {
         await new Promise(resolve => setTimeout(resolve, 500)); // Wait 500ms
         attempts++;
       }
-      
-      // Debug: Check what's in window.appData
-      console.debug('[StatsService] DEBUG - window.appData:', window.appData);
-      console.debug('[StatsService] DEBUG - global bookingsData length:', window.appData?.bookingsData?.length);
       
       const { bookingsData } = window.appData || {};
       if (!bookingsData || !bookingsData.length) {
@@ -616,30 +600,23 @@ export const statsService = {
       try {
         // Dynamically import the locations data
         locations = await import('../locations.json').then(module => module.default);
-        console.log(`[StatsService] Loaded ${locations.length} locations from locations.json`);
+        console.debug(`[StatsService] Loaded ${locations.length} locations from locations.json`);
         
         // Find the location name using the provided ID
         const locationMatch = locations.find(loc => loc.Location_id === locationId);
         if (locationMatch) {
           locationName = locationMatch.Location_name;
-          console.log(`[StatsService] Found location name: ${locationName} for ID: ${locationId}`);
+          console.debug(`[StatsService] Found location name: ${locationName} for ID: ${locationId}`);
         } else {
           console.warn(`[StatsService] Could not find location name for ID: ${locationId}`);
         }
       } catch (error) {
         console.error(`[StatsService] Error loading locations: ${error.message}`);
-        // Continue anyway, we'll try matching directly
       }
       
-      // Debug: Show a sample booking to check fields
-      if (bookingsData.length > 0) {
-        console.log('[StatsService] DEBUG - First booking record:', bookingsData[0]);
-        console.log('[StatsService] DEBUG - Location field in first booking:', bookingsData[0].Location);
-      }
-      
-      // Filter bookings for this location (try multiple matching strategies)
+      // Filter bookings for this location
       const locationBookings = bookingsData.filter(booking => {
-        // Strategy 1: Match by ID first if the booking has Location_id or LocationID
+        // Strategy 1: Match by ID first
         const bookingLocationId = booking.Location_id || booking.LocationID;
         if (bookingLocationId && bookingLocationId === locationId) {
           return true;
@@ -650,7 +627,7 @@ export const statsService = {
           return true;
         }
         
-        // Strategy 3: Direct match between location ID and Location field (fallback)
+        // Strategy 3: Direct match between location ID and Location field
         if (booking.Location === locationId) {
           return true;
         }
@@ -659,29 +636,26 @@ export const statsService = {
       });
       
       if (!locationBookings.length) {
-        console.warn(`[StatsService] No bookings found for location ID: ${locationId} or name: ${locationName}`);
-        
-        // Last resort: Try to match any location with a name that contains part of the ID or vice versa
-        if (locationName) {
-          const fuzzyLocationBookings = bookingsData.filter(booking => {
-            const locationField = booking.Location || '';
-            return locationField.includes(locationName) || locationName.includes(locationField);
-          });
-          
-          if (fuzzyLocationBookings.length > 0) {
-            console.log(`[StatsService] Found ${fuzzyLocationBookings.length} bookings using fuzzy name matching for ${locationName}`);
-            return this.processLocationBookings(fuzzyLocationBookings);
-          }
-        }
-        
+        console.warn(`[StatsService] No bookings found for location ID: ${locationId}`);
         return null;
       }
       
-      console.log(`[StatsService] Processing ${locationBookings.length} bookings for location`);
-      return this.processLocationBookings(locationBookings);
+      console.debug(`[StatsService] Processing ${locationBookings.length} bookings for location`);
+      const stats = this.processLocationBookings(locationBookings);
+      
+      // Cache the results
+      locationStatsCache.set(cacheKey, stats);
+      
+      // Limit cache size to 20 entries
+      if (locationStatsCache.size > 20) {
+        const oldestKey = locationStatsCache.keys().next().value;
+        locationStatsCache.delete(oldestKey);
+      }
+      
+      return stats;
     } catch (error) {
       console.error(`[StatsService] Error getting location stats: ${error.message}`);
-      throw new Error(`Failed to get location statistics: ${error.message}`);
+      throw error;
     }
   },
   
@@ -755,6 +729,68 @@ export const statsService = {
     };
     
     return stats;
+  },
+
+  /**
+   * Calculate sport distribution statistics
+   * @param {Array} data - Array of booking objects
+   * @returns {Object} Sport distribution statistics
+   */
+  calculateSportDistribution(data) {
+    try {
+      const sportCounts = data.reduce((acc, booking) => {
+        const sport = booking.Sport || 'Unknown';
+        acc[sport] = (acc[sport] || 0) + 1;
+        return acc;
+      }, {});
+
+      // Calculate percentages
+      const total = data.length;
+      const distribution = {};
+      
+      for (const [sport, count] of Object.entries(sportCounts)) {
+        distribution[sport] = {
+          count,
+          percentage: total > 0 ? (count / total) * 100 : 0
+        };
+      }
+
+      return distribution;
+    } catch (error) {
+      console.error('[StatsService] Error calculating sport distribution:', error);
+      return {};
+    }
+  },
+
+  /**
+   * Calculate status distribution statistics
+   * @param {Array} data - Array of booking objects
+   * @returns {Object} Status distribution statistics
+   */
+  calculateStatusDistribution(data) {
+    try {
+      const statusCounts = data.reduce((acc, booking) => {
+        const status = booking.Status || 'Unknown';
+        acc[status] = (acc[status] || 0) + 1;
+        return acc;
+      }, {});
+
+      // Calculate percentages
+      const total = data.length;
+      const distribution = {};
+      
+      for (const [status, count] of Object.entries(statusCounts)) {
+        distribution[status] = {
+          count,
+          percentage: total > 0 ? (count / total) * 100 : 0
+        };
+      }
+
+      return distribution;
+    } catch (error) {
+      console.error('[StatsService] Error calculating status distribution:', error);
+      return {};
+    }
   }
 };
 

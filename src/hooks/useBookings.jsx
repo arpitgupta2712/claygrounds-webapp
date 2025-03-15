@@ -23,7 +23,8 @@ export const useBookings = () => {
   const {
     bookingsData, filteredData, sortField, sortDirection, 
     activeFilters, selectedYear, setBookingsData, 
-    setFilteredData, batchUpdate, setIsLoading: setAppLoading
+    setFilteredData, batchUpdate, setIsLoading: setAppLoading,
+    setActiveFilters
   } = useApp();
 
   /**
@@ -234,19 +235,21 @@ export const useBookings = () => {
    */
   const clearFilters = useCallback(() => {
     try {
-      // Apply any sorting to the original data
-      const sortedData = sortField 
-        ? sortService.sortData(bookingsData, sortField, sortDirection)
-        : [...bookingsData];
+      console.debug('[useBookings] Clearing all filters');
       
-      // Update state
-      batchUpdate({
-        filteredData: sortedData,
-        activeFilters: { type: null, value: null },
-        currentPage: 1
-      });
+      // Update app context to reset filters
+      setActiveFilters({ type: null, value: null });
+      
+      // Important: Clear the filter cache to prevent stale results
+      filterService.clearCache();
+      
+      // Reset to the original data
+      setFilteredData(null);
+      
+      // Log the number of records after clearing filters
+      console.debug(`[useBookings] Filters cleared, showing all ${bookingsData?.length || 0} records`);
     } catch (error) {
-      setError(error.message);
+      console.error('[useBookings] Error clearing filters:', error);
       trackError(
         error,
         'useBookings.clearFilters',
@@ -254,7 +257,7 @@ export const useBookings = () => {
         ErrorCategory.DATA
       );
     }
-  }, [bookingsData, sortField, sortDirection, batchUpdate, trackError]);
+  }, [setActiveFilters, bookingsData, trackError]);
   
   /**
    * Apply sorting to booking data

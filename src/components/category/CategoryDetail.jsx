@@ -10,6 +10,11 @@ const CategoryDetail = React.memo(function CategoryDetail({ category, onClose })
   const formatStatValue = useCallback((value, type = 'number') => {
     if (value === undefined || value === null) return 'N/A';
     
+    // Handle Top Customer object structure
+    if (typeof value === 'object' && value.displayText) {
+      return value.displayText;
+    }
+    
     switch (type) {
       case 'currency':
         return formatUtils.currency(value);
@@ -30,8 +35,10 @@ const CategoryDetail = React.memo(function CategoryDetail({ category, onClose })
   const detailedStats = useMemo(() => {
     if (!stats) return [];
 
-    console.log('CategoryDetail - stats:', stats);
-    console.log('CategoryDetail - config:', config);
+    // Only log in development and with a more specific identifier
+    if (process.env.NODE_ENV === 'development') {
+      console.debug(`[CategoryDetail][${title}] Processing stats for category type: ${config.category}`);
+    }
 
     const baseStats = [
       { label: 'Total Bookings', value: stats.totalBookings },
@@ -43,7 +50,11 @@ const CategoryDetail = React.memo(function CategoryDetail({ category, onClose })
     // Add extra stats from config
     const extraStats = config?.extraStats?.map(extraStat => {
       const value = stats[extraStat.label];
-      console.log(`CategoryDetail - extraStat ${extraStat.label}:`, value);
+      
+      // Only log in development and when debugging is needed
+      if (process.env.NODE_ENV === 'development' && value === undefined) {
+        console.warn(`[CategoryDetail][${title}] Missing value for extraStat: ${extraStat.label}`);
+      }
       
       // For percentage values that are already formatted (contain %), don't apply percentage formatting
       const type = typeof value === 'string' && value.includes('%') ? 'text' : (extraStat.type || 'text');
@@ -55,9 +66,14 @@ const CategoryDetail = React.memo(function CategoryDetail({ category, onClose })
     }) || [];
 
     const allStats = [...baseStats, ...extraStats].filter(stat => stat.value !== undefined);
-    console.log('CategoryDetail - allStats:', allStats);
+    
+    // Only log in development and with a more specific identifier
+    if (process.env.NODE_ENV === 'development') {
+      console.debug(`[CategoryDetail][${title}] Generated ${allStats.length} stats`);
+    }
+    
     return allStats;
-  }, [stats, config]);
+  }, [stats, config, title]);
 
   return (
     <BaseModal

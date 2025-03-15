@@ -4,6 +4,10 @@ import { formatDate, parseDate, isDateInRange } from '../utils/dateUtils';
 // Cache for storing filtered results
 const filterCache = new Map();
 
+// Cache configuration
+const CACHE_MAX_SIZE = 10; // Reduced from 20 to prevent excessive caching
+const CACHE_TTL = 30000; // TTL of 30 seconds for cached results
+
 /**
  * Service for filtering and searching data
  */
@@ -19,13 +23,23 @@ export const filterService = {
     // Generate cache key
     const cacheKey = `${filterType}_${JSON.stringify(filterValue)}_${data.length}`;
     
-    // Check cache
+    // Check cache with TTL
     if (filterCache.has(cacheKey)) {
-      console.log(`[FilterService] Using cached results for ${filterType} filter`);
-      return filterCache.get(cacheKey);
+      const cacheEntry = filterCache.get(cacheKey);
+      const currentTime = Date.now();
+      
+      // Check if cache entry is still valid
+      if (currentTime - cacheEntry.timestamp < CACHE_TTL) {
+        console.debug(`[FilterService] Using cached results for ${filterType} filter`);
+        return cacheEntry.data;
+      } else {
+        // Cache expired, remove it
+        console.debug(`[FilterService] Cache expired for ${filterType} filter`);
+        filterCache.delete(cacheKey);
+      }
     }
     
-    console.log(`[FilterService] Applying filter: ${filterType}`, filterValue);
+    console.debug(`[FilterService] Applying filter: ${filterType}`, filterValue);
 
     if (!filterType || !FilterConfig[filterType]) {
       console.warn('[FilterService] No valid filter type specified');
@@ -59,15 +73,31 @@ export const filterService = {
           break;
       }
 
-      console.log(`[FilterService] Filter applied. Results: ${filteredData.length} records`);
+      console.debug(`[FilterService] Filter applied. Results: ${filteredData.length} records`);
       
-      // Cache the result
-      filterCache.set(cacheKey, filteredData);
+      // Cache the result with timestamp
+      filterCache.set(cacheKey, {
+        data: filteredData,
+        timestamp: Date.now() 
+      });
       
       // Limit cache size
-      if (filterCache.size > 20) {
-        const oldestKey = filterCache.keys().next().value;
-        filterCache.delete(oldestKey);
+      if (filterCache.size > CACHE_MAX_SIZE) {
+        // Find oldest entry
+        let oldestKey = null;
+        let oldestTime = Infinity;
+        
+        for (const [key, entry] of filterCache.entries()) {
+          if (entry.timestamp < oldestTime) {
+            oldestTime = entry.timestamp;
+            oldestKey = key;
+          }
+        }
+        
+        if (oldestKey) {
+          console.debug(`[FilterService] Removing oldest cache entry`);
+          filterCache.delete(oldestKey);
+        }
       }
       
       return filteredData;
@@ -215,8 +245,9 @@ export const filterService = {
    * Clear the filter cache
    */
   clearCache() {
+    const cacheSize = filterCache.size;
     filterCache.clear();
-    console.log('[FilterService] Filter cache cleared');
+    console.debug(`[FilterService] Filter cache cleared (${cacheSize} entries removed)`);
   },
   
   /**

@@ -385,6 +385,8 @@ function LocationReport({ locationId, locationName }) {
 
   // Load location-specific stats
   useEffect(() => {
+    let mounted = true;
+    
     async function loadLocationStats() {
       if (!locationId) return;
       
@@ -392,11 +394,14 @@ function LocationReport({ locationId, locationName }) {
       setError(null);
       
       try {
-        console.log(`[LocationReport] Loading statistics for location: ${locationId} (${locationName})`);
+        console.debug(`[LocationReport] Loading statistics for location: ${locationId} (${locationName})`);
         const stats = await statsService.getLocationStats(locationId);
         
+        // Only update state if component is still mounted
+        if (!mounted) return;
+        
         if (!stats) {
-          console.error(`[LocationReport] No statistics found for location: ${locationName}`);
+          console.warn(`[LocationReport] No statistics found for location: ${locationName}`);
           setError(`No statistics available for ${locationName}. This could be because there are no bookings for this location or there was an error loading the data.`);
           setLocationStats(null);
           return;
@@ -404,6 +409,9 @@ function LocationReport({ locationId, locationName }) {
         
         setLocationStats(stats);
       } catch (err) {
+        // Only update state if component is still mounted
+        if (!mounted) return;
+        
         console.error('[LocationReport] Error loading location stats:', err);
         setError(`Failed to load location statistics: ${err.message}`);
         trackError(
@@ -414,12 +422,19 @@ function LocationReport({ locationId, locationName }) {
           { locationId, locationName }
         );
       } finally {
-        setIsLoading(false);
+        if (mounted) {
+          setIsLoading(false);
+        }
       }
     }
     
     loadLocationStats();
-  }, [locationId, trackError]);
+    
+    // Cleanup function to prevent state updates after unmount
+    return () => {
+      mounted = false;
+    };
+  }, [locationId, locationName, trackError]);
 
   // Handle export to PDF
   const handleExportPDF = () => {

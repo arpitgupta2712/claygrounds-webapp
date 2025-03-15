@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useFilters } from '../../hooks/useFilters';
 import { FilterTypes } from '../../utils/constants';
@@ -9,6 +9,9 @@ import { FilterTypes } from '../../utils/constants';
  */
 function FilterControls() {
   const [isFilterTypeOpen, setIsFilterTypeOpen] = useState(false);
+  const resetTriggeredRef = useRef(false);
+  const { activeFilters } = useApp();
+  
   const {
     filterType,
     singleDate,
@@ -34,8 +37,13 @@ function FilterControls() {
 
   // Initialize filters from active filters on mount
   useEffect(() => {
-    initFromActiveFilters();
-  }, [initFromActiveFilters]);
+    // Only initialize from active filters if not coming from a reset
+    if (!resetTriggeredRef.current) {
+      initFromActiveFilters();
+    } else {
+      resetTriggeredRef.current = false;
+    }
+  }, [initFromActiveFilters, activeFilters]);
 
   // Get locations for dropdown
   const locations = getLocations();
@@ -57,6 +65,12 @@ function FilterControls() {
     if (!filterType) return 'Select Filter';
     const option = Object.entries(FilterTypes).find(([_, value]) => value === filterType);
     return option ? option[0].replace(/_/g, ' ') : 'Select Filter';
+  };
+
+  // Enhanced reset handler that tracks the reset to prevent re-initialization
+  const handleResetFilter = () => {
+    resetTriggeredRef.current = true;
+    resetFilter();
   };
 
   return (
@@ -202,7 +216,7 @@ function FilterControls() {
         <button
           id="resetFilter"
           className="py-3 px-5 bg-white border border-gray-300 text-text-medium rounded hover:bg-gray-50 transition-colors min-w-[100px] font-medium"
-          onClick={resetFilter}
+          onClick={handleResetFilter}
         >
           Reset
         </button>
