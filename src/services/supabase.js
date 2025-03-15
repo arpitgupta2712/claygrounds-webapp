@@ -1,133 +1,56 @@
 import { createClient } from '@supabase/supabase-js';
 import { logger } from '../utils/logger';
-import { ErrorCategory, ErrorSeverity } from '../utils/errorTypes';
-import { ROUTES, getFullUrl } from '../config/routes';
+import { ErrorCategory } from '../utils/errorTypes';
+import { ROUTES } from '../config/routes';
 
-// Enhanced environment detection
-const getEnvironmentInfo = () => {
-  const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
-  const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
-  const isDevelopmentBranch = hostname === 'development--claygroundspartner.netlify.app';
-  const isNetlifyPreview = hostname.includes('netlify.app') && !isDevelopmentBranch;
-  const configuredSiteUrl = import.meta.env.VITE_SITE_URL?.trim();
-  const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
-  
-  // Determine the effective site URL based on environment
-  let effectiveSiteUrl;
-  if (isDevelopmentBranch) {
-    // Always use the fixed development URL
-    effectiveSiteUrl = 'https://development--claygroundspartner.netlify.app';
-  } else if (isNetlifyPreview) {
-    // For other preview deployments, use current origin
-    effectiveSiteUrl = currentOrigin;
-  } else {
-    // For production and local, use configured URL or fallback to origin
-    effectiveSiteUrl = configuredSiteUrl || currentOrigin;
-  }
-  
-  // Log warning only if we're in production and missing the URL
-  if (!configuredSiteUrl && !isNetlifyPreview && !isLocalhost && !isDevelopmentBranch) {
-    logger.warn(ErrorCategory.AUTH, 'Missing VITE_SITE_URL in production', { 
-      hostname,
-      environment: 'production'
-    });
-  }
-  
-  return {
-    isDevelopment: isLocalhost || isNetlifyPreview || isDevelopmentBranch || import.meta.env.VITE_APP_ENV === 'development',
-    isProduction: !isLocalhost && !isNetlifyPreview && !isDevelopmentBranch && import.meta.env.VITE_APP_ENV === 'production',
-    hostname,
-    origin: currentOrigin,
-    configuredSiteUrl,
-    effectiveSiteUrl,
-    isNetlifyPreview,
-    isDevelopmentBranch
-  };
-};
+// Simple environment check
+const isDevelopment = import.meta.env.VITE_APP_ENV === 'development';
 
-const env = getEnvironmentInfo();
-
-// Get and validate environment variables
+// Get environment variables
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
+const siteUrl = import.meta.env.VITE_SITE_URL?.trim();
 
-// Validate Supabase key format
-if (supabaseAnonKey && (!supabaseAnonKey.includes('.') || supabaseAnonKey.split('.').length !== 3)) {
-  logger.error(ErrorCategory.AUTH, 'Invalid Supabase key format', {
-    keyLength: supabaseAnonKey.length,
-    hasCorrectParts: supabaseAnonKey.split('.').length === 3
-  });
-  throw new Error('Invalid Supabase key format: Should be a valid JWT token');
+// Basic validation
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error('Missing required Supabase configuration');
 }
 
-// Use the effective site URL which handles all environments correctly
-const siteUrl = env.effectiveSiteUrl;
+// For auth redirect, use the configured site URL or fallback to window.location.origin
+const getRedirectUrl = () => {
+  if (typeof window === 'undefined') return siteUrl;
+  
+  // Always use the current origin for auth redirects
+  const redirectBase = window.location.origin;
+  return `${redirectBase}${ROUTES.AUTH_REDIRECT}`;
+};
 
-// Debug logging for environment setup
-logger.debug(ErrorCategory.AUTH, 'Supabase Environment Setup', {
-  environment: env.isDevelopment ? 'development' : 'production',
-  hostname: env.hostname,
-  isLocalhost: env.hostname === 'localhost',
-  isNetlifyPreview: env.isNetlifyPreview,
-  isDevelopmentBranch: env.isDevelopmentBranch,
-  configuredSiteUrl: env.configuredSiteUrl,
-  effectiveSiteUrl: env.effectiveSiteUrl,
-  actualSiteUrl: siteUrl,
-  origin: env.origin,
-  hasValidSupabaseKey: supabaseAnonKey?.split('.').length === 3
+// Debug logging
+logger.debug(ErrorCategory.AUTH, 'Supabase Configuration', {
+  environment: isDevelopment ? 'development' : 'production',
+  siteUrl,
+  redirectUrl: getRedirectUrl(),
+  hasSupabaseUrl: !!supabaseUrl,
+  hasSupabaseKey: !!supabaseAnonKey
 });
 
-// Always use effective site URL for redirect in auth flow
-const redirectUrl = getFullUrl(ROUTES.AUTH_REDIRECT, siteUrl);
-
-// Validate environment variables
-if (!supabaseUrl || !supabaseAnonKey) {
-  const missingVars = [];
-  if (!supabaseUrl) missingVars.push('VITE_SUPABASE_URL');
-  if (!supabaseAnonKey) missingVars.push('VITE_SUPABASE_ANON_KEY');
-  
-  throw new Error(
-    `Missing required environment variables: ${missingVars.join(', ')}`
-  );
-}
-
-// Initialize Supabase client with environment-aware configuration
+// Initialize Supabase client with minimal configuration
 export const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true,
-    flowType: 'pkce',
-    pkce: {
-      codeChallengeMethod: 'S256',
-      codeChallengeInHeader: true
-    },
     storage: typeof window !== 'undefined' ? window.localStorage : null,
     storageKey: 'supabase-auth-token',
-    debug: env.isDevelopment,
-    redirectTo: redirectUrl
-  },
-  global: {
-    headers: {
-      'X-Client-Info': 'claygrounds-webapp',
-      'X-Environment': env.isDevelopment ? 'development' : 'production',
-      'X-Origin': env.origin,
-      'X-Site-URL': siteUrl,
-      'X-Deploy-Type': env.isDevelopmentBranch ? 'development-branch' : 
-                      env.isNetlifyPreview ? 'preview' : 
-                      env.isProduction ? 'production' : 'local'
-    }
+    redirectTo: getRedirectUrl()
   }
 });
 
-// Log initialization details
+// Log initialization
 logger.info(ErrorCategory.AUTH, 'Supabase Client Initialized', {
   timestamp: new Date().toISOString(),
-  environment: env.isDevelopment ? 'development' : 'production',
-  redirectUrl,
-  origin: env.origin,
-  isProduction: env.isProduction,
-  siteUrl
+  environment: isDevelopment ? 'development' : 'production',
+  redirectUrl: getRedirectUrl()
 });
 
 // Verify the client is working with role check
