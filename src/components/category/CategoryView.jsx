@@ -5,6 +5,7 @@ import { useErrorTracker } from '../../hooks/useErrorTracker';
 import { statsService } from '../../services/statsService';
 import { categoryConfigs } from '../../utils/constants';
 import CategoryCard from './CategoryCard';
+import CategoryDetail from './CategoryDetail';
 import Loading from '../common/Loading';
 import React from 'react';
 import PropTypes from 'prop-types';
@@ -15,6 +16,7 @@ import PropTypes from 'prop-types';
 const CategoryView = React.memo(function CategoryView({ type }) {
   const [stats, setStats] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState(null);
   const { filteredData } = useApp();
   const { groupedData, groupData } = useBookings();
   const { trackError } = useErrorTracker();
@@ -67,11 +69,13 @@ const CategoryView = React.memo(function CategoryView({ type }) {
             return [key, statsCache.current.get(cacheKey)];
           }
 
+          console.log(`[CategoryView] Calculating stats for ${key} with ${bookings.length} bookings`);
           const stats = await statsService.calculateCategoryStats(
             bookings,
             key,
             config
           );
+          console.log(`[CategoryView] Stats calculated for ${key}:`, stats);
           
           // Cache the result
           statsCache.current.set(cacheKey, stats);
@@ -89,6 +93,7 @@ const CategoryView = React.memo(function CategoryView({ type }) {
       results.forEach(([key, result]) => {
         if (result) {
           categoryStats[key] = result;
+          console.log(`[CategoryView] Final stats for ${key}:`, result);
         }
       });
 
@@ -114,6 +119,20 @@ const CategoryView = React.memo(function CategoryView({ type }) {
     };
   }, []);
 
+  // Handle category card click
+  const handleCategoryClick = useCallback((title, categoryStats) => {
+    setSelectedCategory({
+      title,
+      stats: categoryStats,
+      config
+    });
+  }, [config]);
+
+  // Handle closing the detail view
+  const handleCloseDetail = useCallback(() => {
+    setSelectedCategory(null);
+  }, []);
+
   // Memoize category cards rendering - MOVED BEFORE CONDITIONAL RETURNS
   const categoryCards = useMemo(() => {
     if (!stats || !config) return null;
@@ -128,11 +147,12 @@ const CategoryView = React.memo(function CategoryView({ type }) {
             title={category}
             stats={categoryStats}
             config={config}
+            onClick={handleCategoryClick}
           />
         ))}
       </div>
     );
-  }, [stats, config]);
+  }, [stats, config, handleCategoryClick]);
 
   // Early return cases
   if (!config) return null;
@@ -145,6 +165,14 @@ const CategoryView = React.memo(function CategoryView({ type }) {
         {config.title || `${type} Statistics`}
       </h2>
       {categoryCards}
+
+      {/* Category detail modal */}
+      {selectedCategory && (
+        <CategoryDetail
+          category={selectedCategory}
+          onClose={handleCloseDetail}
+        />
+      )}
     </div>
   );
 });

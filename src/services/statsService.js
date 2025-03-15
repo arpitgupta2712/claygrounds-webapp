@@ -273,11 +273,16 @@ export const statsService = {
       
       // Add any extra stats defined in the config
       if (config.extraStats) {
+        console.log('[StatsService] Processing extra stats for config:', config);
         config.extraStats.forEach(stat => {
-          stats[stat.label] = stat.calculate(categoryData);
+          console.log(`[StatsService] Calculating ${stat.label}...`);
+          const value = stat.calculate(categoryData);
+          console.log(`[StatsService] ${stat.label} calculated:`, value);
+          stats[stat.label] = value;
         });
       }
       
+      console.log('[StatsService] Final stats:', stats);
       return stats;
     } catch (error) {
       console.error(`[StatsService] Error calculating category stats: ${error.message}`);

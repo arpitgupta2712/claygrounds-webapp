@@ -9,8 +9,9 @@ import Tooltip from '../common/Tooltip';
  * @param {string} props.title - Category title
  * @param {Object} props.stats - Category statistics
  * @param {Object} props.config - Category configuration
+ * @param {Function} props.onClick - Click handler for the card
  */
-const CategoryCard = React.memo(function CategoryCard({ title, stats, config }) {
+const CategoryCard = React.memo(function CategoryCard({ title, stats, config, onClick }) {
   // Remove console.log to reduce memory usage
   if (!stats) {
     return null;
@@ -56,10 +57,27 @@ const CategoryCard = React.memo(function CategoryCard({ title, stats, config }) 
     }).filter(Boolean);
   }, [config?.extraStats, stats, formatStatValue]);
 
+  // Memoize click handler
+  const handleClick = useCallback(() => {
+    if (onClick) {
+      onClick(title, stats);
+    }
+  }, [onClick, title, stats]);
+
   return (
-    <div className="bg-white p-7 rounded-md shadow transition-all duration-300 border border-gray-100 
-                   hover:shadow-md hover:border-primary-light hover:bg-primary hover:text-white
-                   cursor-pointer relative overflow-hidden transform hover:-translate-y-1 h-full flex flex-col">
+    <div 
+      onClick={handleClick}
+      role="button"
+      tabIndex={0}
+      onKeyPress={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          handleClick();
+        }
+      }}
+      className="bg-white p-7 rounded-md shadow transition-all duration-300 border border-gray-100 
+                 hover:shadow-md hover:border-primary-light hover:bg-primary hover:text-white
+                 cursor-pointer relative overflow-hidden transform hover:-translate-y-1 h-full flex flex-col"
+    >
       {/* Category title */}
       <h3 className="text-2xl font-semibold mb-4 text-text-dark group-hover:text-white transition-colors">
         {title}
@@ -113,7 +131,8 @@ const CategoryCard = React.memo(function CategoryCard({ title, stats, config }) 
   return (
     prevProps.title === nextProps.title &&
     JSON.stringify(prevProps.stats) === JSON.stringify(nextProps.stats) &&
-    JSON.stringify(prevProps.config) === JSON.stringify(nextProps.config)
+    JSON.stringify(prevProps.config) === JSON.stringify(nextProps.config) &&
+    prevProps.onClick === nextProps.onClick
   );
 });
 
@@ -130,7 +149,8 @@ CategoryCard.propTypes = {
       label: PropTypes.string.isRequired,
       calculate: PropTypes.func.isRequired
     }))
-  })
+  }),
+  onClick: PropTypes.func
 };
 
 export default CategoryCard;
