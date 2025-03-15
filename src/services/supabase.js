@@ -14,19 +14,24 @@ console.log('[SupabaseService] Key Format Check:', {
   keyParts: supabaseAnonKey?.split('.').length || 0,
   keyLength: supabaseAnonKey?.length || 0,
   isValidJWT: supabaseAnonKey?.split('.').length === 3,
-  keyStart: supabaseAnonKey?.substring(0, 20) + '...',
-  keyEnd: '...' + supabaseAnonKey?.substring(supabaseAnonKey.length - 20)
+  keyStart: supabaseAnonKey?.substring(0, 5) + '...',
+  keyEnd: '...' + supabaseAnonKey?.substring(supabaseAnonKey.length - 5)
 });
+
+// Always use current window location for redirect in auth flow
+const currentUrl = window.location.origin;
+const redirectUrl = getFullUrl(ROUTES.AUTH_REDIRECT, currentUrl);
 
 // Enhanced debug logging for environment setup
 console.log('[SupabaseService] Environment Setup:', {
   environment: appEnv,
-  siteUrl,
+  configuredSiteUrl: siteUrl,
+  currentOrigin: currentUrl,
+  actualRedirectUrl: redirectUrl,
   hasSupabaseUrl: !!supabaseUrl,
   supabaseUrlLength: supabaseUrl?.length,
   hasAnonKey: !!supabaseAnonKey,
-  anonKeyLength: supabaseAnonKey?.length,
-  redirectUrl: getFullUrl(ROUTES.AUTH_REDIRECT, siteUrl)
+  anonKeyLength: supabaseAnonKey?.length
 });
 
 // Validate environment variables - only in production
@@ -68,13 +73,14 @@ export const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
     },
     storage: window.localStorage,
     storageKey: 'supabase-auth-token',
-    debug: isDevelopment,
-    redirectTo: getFullUrl(ROUTES.AUTH_REDIRECT, siteUrl)
+    debug: true, // Enable debug for all environments temporarily
+    redirectTo: redirectUrl // Always use current origin for redirect
   },
   global: {
     headers: {
       'X-Client-Info': 'claygrounds-webapp',
-      'X-Environment': appEnv
+      'X-Environment': appEnv,
+      'X-Origin': window.location.origin
     }
   }
 });
@@ -111,7 +117,8 @@ export const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
 console.log('[SupabaseService] Client Initialized:', {
   timestamp: new Date().toISOString(),
   environment: appEnv,
-  redirectUrl: getFullUrl(ROUTES.AUTH_REDIRECT, siteUrl)
+  redirectUrl: redirectUrl,
+  origin: window.location.origin
 });
 
 // Disable Supabase's internal debug logs in production
