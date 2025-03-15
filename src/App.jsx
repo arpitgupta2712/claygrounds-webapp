@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ErrorProvider, ErrorDisplay } from './context/ErrorContext';
 import { AppProvider } from './context/AppContext';
@@ -7,6 +7,12 @@ import Dashboard from './components/dashboard/Dashboard';
 import LoginPage from './components/auth/LoginPage';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import { withErrorBoundary } from './components/common/ErrorBoundary';
+import { ToastContainer } from './hooks/useToast';
+
+// Import PerformanceMonitor only in development
+const PerformanceMonitor = process.env.NODE_ENV === 'development'
+  ? React.lazy(() => import('./components/dev/PerformanceMonitor'))
+  : () => null;
 
 function AppFallback({ error }) {
   return (
@@ -47,6 +53,12 @@ const AppWithErrorBoundary = withErrorBoundary(
           <AuthProvider>
             <AppProvider>
               <ErrorDisplay />
+              <ToastContainer />
+              {process.env.NODE_ENV === 'development' && (
+                <Suspense fallback={null}>
+                  <PerformanceMonitor />
+                </Suspense>
+              )}
               <Routes>
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/dashboard/*" element={

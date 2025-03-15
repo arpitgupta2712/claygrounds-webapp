@@ -31,6 +31,32 @@ const THRESHOLDS = {
   UPDATE_STALE: 30000
 };
 
+// Add memory optimization suggestions
+function getMemoryOptimizationSuggestions(metrics) {
+  const suggestions = [];
+  const memoryUsagePercent = (metrics.jsHeapSize / metrics.totalJSHeapSize) * 100;
+  const memoryGrowthRate = metrics.memoryHistory.length > 1
+    ? ((metrics.memoryHistory[metrics.memoryHistory.length - 1] - metrics.memoryHistory[0]) 
+       / metrics.memoryHistory.length) * (1000 / 2000)
+    : 0;
+
+  if (memoryUsagePercent > THRESHOLDS.MEMORY_USAGE.warning) {
+    suggestions.push('High memory usage detected. Consider:');
+    suggestions.push('• Using React.memo for expensive components');
+    suggestions.push('• Implementing useMemo for complex calculations');
+    suggestions.push('• Checking for memory leaks in useEffect cleanup');
+  }
+
+  if (memoryGrowthRate > THRESHOLDS.MEMORY_GROWTH) {
+    suggestions.push('Memory growing rapidly. Check for:');
+    suggestions.push('• Unbounded arrays or objects');
+    suggestions.push('• Event listener cleanup');
+    suggestions.push('• Cached data cleanup');
+  }
+
+  return suggestions;
+}
+
 function PerformanceMonitor() {
   const [metrics, setMetrics] = useState({
     // Page Performance
@@ -203,6 +229,9 @@ function PerformanceMonitor() {
        / metrics.memoryHistory.length) * (1000 / 2000) // Convert to MB/s
     : 0;
 
+  // Add memory optimization suggestions to the UI
+  const memorySuggestions = getMemoryOptimizationSuggestions(metrics);
+
   return (
     <div className="fixed bottom-0 right-0 m-4 p-4 bg-white rounded-lg shadow-lg text-sm font-mono z-50 max-w-md">
       <div className="flex justify-between items-center mb-3">
@@ -274,11 +303,12 @@ function PerformanceMonitor() {
             </p>
             <p>Heap: {formatBytes(metrics.jsHeapSize * 1024 * 1024)} / {formatBytes(metrics.totalJSHeapSize * 1024 * 1024)}</p>
             <p>Peak: {formatBytes(metrics.memoryPeak * 1024 * 1024)}</p>
-            {metrics.gcSuggested && (
-              <p className="text-red-600 text-xs mt-1">
-                High memory usage detected
-                {memoryGrowthRate > THRESHOLDS.MEMORY_GROWTH ? ' - Rapid growth' : ''}
-              </p>
+            {memorySuggestions.length > 0 && (
+              <div className="mt-2 p-2 bg-red-50 rounded text-xs text-red-600 space-y-1">
+                {memorySuggestions.map((suggestion, index) => (
+                  <p key={index}>{suggestion}</p>
+                ))}
+              </div>
             )}
           </div>
         </div>

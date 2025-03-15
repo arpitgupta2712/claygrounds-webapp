@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useErrorTracker } from '../../hooks/useErrorTracker';
 import { ErrorSeverity, ErrorCategory } from '../../utils/errorTypes';
 

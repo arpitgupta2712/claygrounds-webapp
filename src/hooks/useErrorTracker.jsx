@@ -6,11 +6,12 @@ import { useToast } from './useToast';
 // Global error store with enhanced functionality
 const errorStore = {
   errors: [],
-  maxErrors: 100,
+  maxErrors: 50,
   consoleLogging: true,
   criticalErrorCallback: null,
   errorSubscribers: new Set(),
   errorAggregates: new Map(), // Store error aggregates
+  lastCleanup: Date.now(),
   
   getUserInfo() {
     return {
@@ -113,7 +114,29 @@ const errorStore = {
         console.error('[ErrorTracker] Error in subscriber callback:', error);
       }
     });
-  }
+  },
+
+  // New cleanup method
+  cleanup() {
+    const now = Date.now();
+    // Only cleanup every 5 minutes
+    if (now - this.lastCleanup < 5 * 60 * 1000) return;
+    
+    // Clear old aggregates (older than 1 hour)
+    const hourAgo = now - (60 * 60 * 1000);
+    for (const [key, aggregate] of this.errorAggregates) {
+      if (new Date(aggregate.lastOccurrence).getTime() < hourAgo) {
+        this.errorAggregates.delete(key);
+      }
+    }
+    
+    // Trim errors array if it's too large
+    if (this.errors.length > this.maxErrors) {
+      this.errors = this.errors.slice(0, this.maxErrors);
+    }
+    
+    this.lastCleanup = now;
+  },
 };
 
 // Setup global error handlers
@@ -143,6 +166,7 @@ if (typeof window !== 'undefined') {
 
 // Global track error function with enhanced aggregation
 function trackErrorGlobal(error, context, severity, category, metadata = {}) {
+  errorStore.cleanup(); // Add cleanup call
   // Handle null errors (used for logging non-error events)
   if (!error && severity === ErrorSeverity.INFO) {
     const errorInfo = {
