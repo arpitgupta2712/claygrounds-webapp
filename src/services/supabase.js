@@ -3,14 +3,41 @@ import { logger } from '../utils/logger';
 import { ErrorCategory } from '../utils/errorTypes';
 import { ROUTES } from '../config/routes';
 
-// Get environment variables
+// Get and validate environment variables
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
 
-// Basic validation
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing required Supabase configuration');
+// Validate configuration
+function validateConfig() {
+  const errors = [];
+  
+  if (!supabaseUrl) {
+    errors.push('VITE_SUPABASE_URL is missing');
+  }
+  
+  if (!supabaseAnonKey) {
+    errors.push('VITE_SUPABASE_ANON_KEY is missing');
+  } else {
+    // Validate key format (should be a JWT token)
+    const parts = supabaseAnonKey.split('.');
+    if (parts.length !== 3) {
+      errors.push('VITE_SUPABASE_ANON_KEY is not in valid JWT format');
+    }
+    
+    // Check if key is truncated (comparing with known length)
+    const expectedLength = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBwZHlubGp5bHFtYmtreWpjYXBkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDAwNzMyMzgsImV4cCI6MjA1NTY0OTIzOH0.99PUtn0VHw6kwTY8cx_UNfCPal-vJwoIlAG2njqbE4A'.length;
+    if (supabaseAnonKey.length !== expectedLength) {
+      errors.push(`VITE_SUPABASE_ANON_KEY appears to be truncated. Expected length: ${expectedLength}, got: ${supabaseAnonKey.length}`);
+    }
+  }
+  
+  if (errors.length > 0) {
+    throw new Error('Supabase configuration errors:\n' + errors.join('\n'));
+  }
 }
+
+// Validate before proceeding
+validateConfig();
 
 // Initialize Supabase client
 export const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
@@ -19,8 +46,17 @@ export const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     detectSessionInUrl: true,
     storage: typeof window !== 'undefined' ? window.localStorage : null,
-    storageKey: 'supabase-auth-token'
+    storageKey: 'supabase-auth-token',
+    flowType: 'pkce'
   }
+});
+
+// Debug logging for initialization
+logger.debug(ErrorCategory.AUTH, 'Supabase Configuration', {
+  url: supabaseUrl,
+  keyLength: supabaseAnonKey.length,
+  keyFormat: 'JWT',
+  storage: 'localStorage'
 });
 
 // Set up auth state change listener
@@ -60,19 +96,33 @@ supabaseClient.auth.onAuthStateChange((event, session) => {
 
 /**
  * Sign in with Google OAuth
- * @returns {Promise<void>}
  */
 export async function signInWithGoogle() {
-  const { error } = await supabaseClient.auth.signInWithOAuth({
-    provider: 'google',
-    options: {
-      redirectTo: `${window.location.origin}${ROUTES.AUTH_REDIRECT}`
+  try {
+    // Clear any existing session first
+    await supabaseClient.auth.signOut();
+    
+    // Clear local storage
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem('supabase-auth-token');
     }
-  });
+    
+    const { error } = await supabaseClient.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}${ROUTES.AUTH_REDIRECT}`,
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'consent'
+        }
+      }
+    });
 
-  if (error) {
+    if (error) throw error;
+  } catch (error) {
     logger.error(ErrorCategory.AUTH, 'Google sign in failed', {
-      error: error.message
+      error: error.message,
+      stack: error.stack
     });
     throw error;
   }
@@ -80,12 +130,17 @@ export async function signInWithGoogle() {
 
 /**
  * Sign out the current user
- * @returns {Promise<void>}
  */
 export async function signOut() {
-  const { error } = await supabaseClient.auth.signOut();
-  
-  if (error) {
+  try {
+    const { error } = await supabaseClient.auth.signOut();
+    if (error) throw error;
+    
+    // Clear local storage
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem('supabase-auth-token');
+    }
+  } catch (error) {
     logger.error(ErrorCategory.AUTH, 'Sign out failed', {
       error: error.message
     });
