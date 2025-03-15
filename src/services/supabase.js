@@ -9,18 +9,31 @@ const getEnvironmentInfo = () => {
   const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
   const isNetlifyPreview = hostname.includes('netlify.app');
   const configuredSiteUrl = import.meta.env.VITE_SITE_URL?.trim();
+  const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
   
-  // Validate site URL based on environment
-  if (!configuredSiteUrl) {
-    logger.warn(ErrorCategory.AUTH, 'Missing VITE_SITE_URL', { hostname });
+  // For Netlify deploy previews, always use the current origin
+  // This ensures we handle dynamic preview URLs correctly
+  const effectiveSiteUrl = isNetlifyPreview 
+    ? currentOrigin 
+    : (configuredSiteUrl || currentOrigin);
+  
+  // Log warning only if we're not in a preview and missing the URL
+  if (!configuredSiteUrl && !isNetlifyPreview) {
+    logger.warn(ErrorCategory.AUTH, 'Missing VITE_SITE_URL', { 
+      hostname,
+      isNetlifyPreview,
+      usingOrigin: currentOrigin 
+    });
   }
   
   return {
     isDevelopment: isLocalhost || isNetlifyPreview || import.meta.env.VITE_APP_ENV === 'development',
     isProduction: !isLocalhost && !isNetlifyPreview && import.meta.env.VITE_APP_ENV === 'production',
     hostname,
-    origin: typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000',
-    configuredSiteUrl
+    origin: currentOrigin,
+    configuredSiteUrl,
+    effectiveSiteUrl,
+    isNetlifyPreview
   };
 };
 
@@ -30,19 +43,21 @@ const env = getEnvironmentInfo();
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
 
-// Use configured site URL first, fallback to origin only if not set
-const siteUrl = env.configuredSiteUrl || env.origin;
+// Use the effective site URL which handles Netlify previews correctly
+const siteUrl = env.effectiveSiteUrl;
 
 // Debug logging for environment setup
 logger.debug(ErrorCategory.AUTH, 'Supabase Environment Setup', {
   environment: env.isDevelopment ? 'development' : 'production',
   hostname: env.hostname,
   isLocalhost: env.hostname === 'localhost',
-  isNetlifyPreview: env.hostname.includes('netlify.app'),
+  isNetlifyPreview: env.isNetlifyPreview,
   configuredSiteUrl: env.configuredSiteUrl,
+  effectiveSiteUrl: env.effectiveSiteUrl,
   actualSiteUrl: siteUrl,
   origin: env.origin,
-  usingConfiguredUrl: !!env.configuredSiteUrl
+  usingConfiguredUrl: !!env.configuredSiteUrl,
+  isPreviewUrl: env.isNetlifyPreview
 });
 
 // Always use configured site URL for redirect in auth flow
