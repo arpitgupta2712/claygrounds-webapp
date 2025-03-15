@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
-import { logger, LogCategory, LogLevel } from '../utils/logger';
+import { logger } from '../utils/logger';
+import { ErrorCategory, ErrorSeverity } from '../utils/errorTypes';
 import { ROUTES, getFullUrl } from '../config/routes';
 
 // Get environment variables and clean them
@@ -118,7 +119,7 @@ if (process.env.NODE_ENV === 'production') {
   supabaseClient.auth.onAuthStateChange((event, session) => {
     // Only log critical auth events in production
     if (['SIGNED_OUT', 'USER_DELETED', 'TOKEN_REFRESHED'].includes(event)) {
-      logger.info(LogCategory.AUTH, `Auth state changed: ${event}`);
+      logger.info(ErrorCategory.AUTH, `Auth state changed: ${event}`);
     }
   });
 }
@@ -129,7 +130,7 @@ if (process.env.NODE_ENV === 'production') {
  * @returns {Promise<string>} CSV content as string
  */
 export async function fetchProtectedCSV(fileName) {
-  logger.debug(LogCategory.DATA, `Fetching CSV: ${fileName}`);
+  logger.debug(ErrorCategory.DATA, `Fetching CSV: ${fileName}`);
   
   try {
     // Verify session first
@@ -138,7 +139,7 @@ export async function fetchProtectedCSV(fileName) {
       throw new Error('No active session');
     }
     
-    logger.debug(LogCategory.AUTH, 'Session verified', {
+    logger.debug(ErrorCategory.AUTH, 'Session verified', {
       userId: session.user.id,
       email: session.user.email
     });
@@ -162,11 +163,11 @@ export async function fetchProtectedCSV(fileName) {
     }
 
     const text = await data.text();
-    logger.debug(LogCategory.DATA, `CSV retrieved, length: ${text.length}`);
+    logger.debug(ErrorCategory.DATA, `CSV retrieved, length: ${text.length}`);
     return text;
 
   } catch (error) {
-    logger.error(LogCategory.DATA, `Failed to fetch CSV: ${fileName}`, error);
+    logger.error(ErrorCategory.DATA, `Failed to fetch CSV: ${fileName}`, error);
     throw error;
   }
 }

@@ -26,11 +26,11 @@ export const statsService = {
     
     // Check cache
     if (statsCache.has(cacheKey)) {
-      console.log('[StatsService] Returning cached statistics');
+      console.debug('[StatsService] Returning cached statistics');
       return statsCache.get(cacheKey);
     }
     
-    console.log('[StatsService] Calculating summary statistics');
+    console.debug('[StatsService] Calculating summary statistics');
 
     try {
       // Group data by different parameters
@@ -191,10 +191,10 @@ export const statsService = {
    * @param {Array} data - Array of booking objects
    * @param {string} category - Category value
    * @param {Object} config - Category configuration
-   * @returns {Object} Category statistics
+   * @returns {Promise<Object>} Category statistics
    */
-  calculateCategoryStats(data, category, config) {
-    console.log(`[StatsService] Calculating stats for category: ${category}`);
+  async calculateCategoryStats(data, category, config) {
+    console.debug(`[StatsService] Calculating stats for category: ${category}`);
     
     try {
       // Get the appropriate grouping function based on category type
@@ -273,16 +273,28 @@ export const statsService = {
       
       // Add any extra stats defined in the config
       if (config.extraStats) {
-        console.log('[StatsService] Processing extra stats for config:', config);
-        config.extraStats.forEach(stat => {
-          console.log(`[StatsService] Calculating ${stat.label}...`);
-          const value = stat.calculate(categoryData);
-          console.log(`[StatsService] ${stat.label} calculated:`, value);
-          stats[stat.label] = value;
+        // Process all extra stats in parallel
+        const extraStatsPromises = config.extraStats.map(async stat => {
+          try {
+            const value = await stat.calculate(categoryData);
+            return [stat.label, value];
+          } catch (error) {
+            console.error(`[StatsService] Error calculating ${stat.label}:`, error);
+            return [stat.label, null];
+          }
+        });
+
+        // Wait for all extra stats to be calculated
+        const extraStatsResults = await Promise.all(extraStatsPromises);
+        
+        // Add successful calculations to stats
+        extraStatsResults.forEach(([label, value]) => {
+          if (value !== null) {
+            stats[label] = value;
+          }
         });
       }
       
-      console.log('[StatsService] Final stats:', stats);
       return stats;
     } catch (error) {
       console.error(`[StatsService] Error calculating category stats: ${error.message}`);
@@ -466,7 +478,7 @@ export const statsService = {
       .filter(key => key.startsWith(`stats_${year}_`));
     
     keysToDelete.forEach(key => statsCache.delete(key));
-    console.log(`[StatsService] Cleared cache for year: ${year}`);
+    console.debug(`[StatsService] Cleared cache for year: ${year}`);
   },
   
   /**
@@ -474,7 +486,7 @@ export const statsService = {
    */
   clearCache() {
     statsCache.clear();
-    console.log('[StatsService] Statistics cache cleared');
+    console.debug('[StatsService] Statistics cache cleared');
   },
 
   /**
@@ -574,22 +586,22 @@ export const statsService = {
    */
   async getLocationStats(locationId) {
     try {
-      console.log(`[StatsService] Fetching statistics for location: ${locationId}`);
+      console.debug(`[StatsService] Fetching statistics for location: ${locationId}`);
       
       // Check if data is ready globally
-      console.log('[StatsService] Checking if booking data is ready:', window.BOOKINGS_DATA_READY);
+      console.debug('[StatsService] Checking if booking data is ready:', window.BOOKINGS_DATA_READY);
       
       // If data isn't ready yet, wait a moment and retry up to 3 times
       let attempts = 0;
       while (!window.BOOKINGS_DATA_READY && attempts < 3) {
-        console.log(`[StatsService] Data not ready yet, waiting (attempt ${attempts + 1}/3)...`);
+        console.debug(`[StatsService] Data not ready yet, waiting (attempt ${attempts + 1}/3)...`);
         await new Promise(resolve => setTimeout(resolve, 500)); // Wait 500ms
         attempts++;
       }
       
       // Debug: Check what's in window.appData
-      console.log('[StatsService] DEBUG - window.appData:', window.appData);
-      console.log('[StatsService] DEBUG - global bookingsData length:', window.appData?.bookingsData?.length);
+      console.debug('[StatsService] DEBUG - window.appData:', window.appData);
+      console.debug('[StatsService] DEBUG - global bookingsData length:', window.appData?.bookingsData?.length);
       
       const { bookingsData } = window.appData || {};
       if (!bookingsData || !bookingsData.length) {

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { useBookings } from './useBookings';
 import { useErrorTracker } from './useErrorTracker';
@@ -24,30 +24,34 @@ export const useFilters = () => {
   const { trackError } = useErrorTracker();
 
   /**
-   * Get locations from data for dropdown
+   * Memoized locations from data for dropdown
    * @returns {Array} Array of unique locations
    */
-  const getLocations = useCallback(() => {
+  const locations = useMemo(() => {
     if (!bookingsData || !bookingsData.length) return [];
     
     try {
       // Use dataUtils to get unique values
-      const locations = dataUtils.getUniqueValues(bookingsData, 'Location');
-      console.log(`[useFilters] Found ${locations.length} unique locations`);
-      // Debug: Log all unique locations
-      console.log('[useFilters] Unique locations:', locations);
-      return locations;
+      const uniqueLocations = dataUtils.getUniqueValues(bookingsData, 'Location');
+      console.log(`[useFilters] Found ${uniqueLocations.length} unique locations`);
+      return uniqueLocations;
     } catch (error) {
       console.error('[useFilters] Error getting locations:', error);
       trackError(
         error,
-        'useFilters.getLocations',
+        'useFilters.locations',
         ErrorSeverity.ERROR,
         ErrorCategory.DATA
       );
       return [];
     }
   }, [bookingsData, trackError]);
+
+  /**
+   * Get locations from memoized data for dropdown
+   * @returns {Array} Array of unique locations
+   */
+  const getLocations = useCallback(() => locations, [locations]);
 
   /**
    * Handle filter type change

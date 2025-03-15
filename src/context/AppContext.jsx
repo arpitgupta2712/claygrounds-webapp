@@ -271,17 +271,23 @@ export function AppProvider({ children }) {
   
   const batchUpdate = useCallback((updates) => {
     // Skip update if nothing changed
-    const hasChanges = Object.entries(updates).some(
-      ([key, value]) => state[key] !== value
-    );
+    const changedKeys = Object.entries(updates).filter(
+      ([key, value]) => state[key] !== value && value !== undefined
+    ).map(([key]) => key);
     
-    if (!hasChanges) {
-      console.log('[AppContext] No changes detected, skipping update');
+    if (changedKeys.length === 0) {
+      console.debug('[AppContext] No changes detected, skipping update');
       return;
     }
     
-    console.log('[AppContext] Batch updating state:', Object.keys(updates));
-    dispatch({ type: ActionTypes.BATCH_UPDATE, payload: updates });
+    // Only include changed values in the update
+    const changedUpdates = changedKeys.reduce((acc, key) => {
+      acc[key] = updates[key];
+      return acc;
+    }, {});
+    
+    console.debug('[AppContext] Batch updating state:', changedKeys);
+    dispatch({ type: ActionTypes.BATCH_UPDATE, payload: changedUpdates });
   }, [state]);
   
   // Initialization flag

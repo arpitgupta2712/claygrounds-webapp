@@ -4,6 +4,7 @@ import { useBookings } from '../../hooks/useBookings';
 import { useErrorTracker } from '../../hooks/useErrorTracker';
 import { statsService } from '../../services/statsService';
 import { categoryConfigs } from '../../utils/constants';
+import { logger } from '../../utils/logger';
 import CategoryCard from './CategoryCard';
 import CategoryDetail from './CategoryDetail';
 import Loading from '../common/Loading';
@@ -46,7 +47,7 @@ const CategoryView = React.memo(function CategoryView({ type }) {
     
     // Skip if no recalculation needed
     if (!shouldRecalculate()) {
-      console.debug('[CategoryView] Using cached stats for', type);
+      logger.debug('[CategoryView] Using cached stats for', type);
       return;
     }
 
@@ -59,7 +60,7 @@ const CategoryView = React.memo(function CategoryView({ type }) {
         return; // The useEffect will trigger again with new groupedData
       }
 
-      // Calculate stats for each category item
+      // Calculate stats for each category item in parallel
       const categoryStats = {};
       const calculations = Object.entries(categoryGroupedData).map(async ([key, bookings]) => {
         try {
@@ -69,19 +70,19 @@ const CategoryView = React.memo(function CategoryView({ type }) {
             return [key, statsCache.current.get(cacheKey)];
           }
 
-          console.log(`[CategoryView] Calculating stats for ${key} with ${bookings.length} bookings`);
+          // Only log when actually calculating (not using cache)
+          logger.debug(`[CategoryView] Calculating stats for ${key}`);
           const stats = await statsService.calculateCategoryStats(
             bookings,
             key,
             config
           );
-          console.log(`[CategoryView] Stats calculated for ${key}:`, stats);
           
           // Cache the result
           statsCache.current.set(cacheKey, stats);
           return [key, stats];
         } catch (error) {
-          console.error(`Error calculating stats for ${key}:`, error);
+          logger.error(`Error calculating stats for ${key}:`, error);
           return [key, null];
         }
       });
@@ -90,17 +91,14 @@ const CategoryView = React.memo(function CategoryView({ type }) {
       const results = await Promise.all(calculations);
       
       // Filter out failed calculations and update state
-      results.forEach(([key, result]) => {
-        if (result) {
-          categoryStats[key] = result;
-          console.log(`[CategoryView] Final stats for ${key}:`, result);
-        }
-      });
-
-      // Update last calculation reference
+      const validResults = results.filter(([_, result]) => result !== null);
+      const categoryStatsObj = Object.fromEntries(validResults);
+      
+      // Update last calculation reference and set stats
       lastCalculationRef.current = { type, data: filteredData };
-      setStats(categoryStats);
+      setStats(categoryStatsObj);
     } catch (error) {
+      logger.error('[CategoryView] Error calculating stats:', error);
       trackError(error, 'CategoryView.calculateStats', 'ERROR', 'DATA');
     } finally {
       setIsLoading(false);
@@ -109,8 +107,10 @@ const CategoryView = React.memo(function CategoryView({ type }) {
 
   // Calculate stats when data changes
   useEffect(() => {
-    calculateStats();
-  }, [calculateStats]);
+    if (shouldRecalculate()) {
+      calculateStats();
+    }
+  }, [calculateStats, shouldRecalculate]);
 
   // Clear cache when component unmounts
   useEffect(() => {

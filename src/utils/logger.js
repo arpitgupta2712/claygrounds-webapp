@@ -1,132 +1,63 @@
 // Log levels
-export const LogLevel = {
-  ERROR: 0,
-  WARN: 1,
-  INFO: 2,
-  DEBUG: 3,
-  TRACE: 4
+const LOG_LEVELS = {
+  DEBUG: 0,
+  INFO: 1,
+  WARN: 2,
+  ERROR: 3
 };
 
-// Log categories
-export const LogCategory = {
-  AUTH: 'auth',
-  DATA: 'data',
-  UI: 'ui',
-  PERF: 'performance',
-  STATE: 'state'
-};
+// Current log level - can be changed at runtime
+let currentLogLevel = process.env.NODE_ENV === 'production' ? LOG_LEVELS.WARN : LOG_LEVELS.INFO;
 
-class Logger {
-  constructor() {
-    this.level = process.env.NODE_ENV === 'development' ? LogLevel.DEBUG : LogLevel.ERROR;
-    this.enabledCategories = new Set(Object.values(LogCategory));
-    
-    // Allow override via localStorage
-    try {
-      const storedLevel = localStorage.getItem('log_level');
-      if (storedLevel) this.level = parseInt(storedLevel);
-      
-      const storedCategories = localStorage.getItem('log_categories');
-      if (storedCategories) {
-        this.enabledCategories = new Set(JSON.parse(storedCategories));
-      }
-    } catch (e) {
-      console.warn('Failed to load logger preferences from localStorage');
-    }
-  }
+// Prefix for all logs
+const LOG_PREFIX = '[Claygrounds]';
 
+export const logger = {
   setLevel(level) {
-    this.level = level;
-    try {
-      localStorage.setItem('log_level', level.toString());
-    } catch (e) {
-      console.warn('Failed to save log level to localStorage');
+    currentLogLevel = LOG_LEVELS[level] || LOG_LEVELS.INFO;
+  },
+
+  debug(...args) {
+    if (currentLogLevel <= LOG_LEVELS.DEBUG) {
+      console.debug(LOG_PREFIX, ...args);
+    }
+  },
+
+  info(...args) {
+    if (currentLogLevel <= LOG_LEVELS.INFO) {
+      console.info(LOG_PREFIX, ...args);
+    }
+  },
+
+  warn(...args) {
+    if (currentLogLevel <= LOG_LEVELS.WARN) {
+      console.warn(LOG_PREFIX, ...args);
+    }
+  },
+
+  error(...args) {
+    if (currentLogLevel <= LOG_LEVELS.ERROR) {
+      console.error(LOG_PREFIX, ...args);
     }
   }
+};
 
-  enableCategory(category) {
-    this.enabledCategories.add(category);
-    this._saveCategories();
-  }
+// Function to filter Supabase logs
+const originalConsoleLog = console.log;
+const originalConsoleDebug = console.debug;
 
-  disableCategory(category) {
-    this.enabledCategories.delete(category);
-    this._saveCategories();
-  }
-
-  _saveCategories() {
-    try {
-      localStorage.setItem('log_categories', JSON.stringify([...this.enabledCategories]));
-    } catch (e) {
-      console.warn('Failed to save log categories to localStorage');
+if (process.env.NODE_ENV === 'production') {
+  console.log = (...args) => {
+    if (!args[0]?.includes?.('supabase')) {
+      originalConsoleLog.apply(console, args);
     }
-  }
-
-  _shouldLog(level, category) {
-    return level <= this.level && this.enabledCategories.has(category);
-  }
-
-  _formatMessage(category, message, data) {
-    const timestamp = new Date().toISOString();
-    const prefix = `[${timestamp}] [${category.toUpperCase()}]`;
-    
-    if (data) {
-      if (typeof data === 'object') {
-        return `${prefix} ${message}\n${JSON.stringify(data, null, 2)}`;
-      }
-      return `${prefix} ${message}: ${data}`;
+  };
+  
+  console.debug = (...args) => {
+    if (!args[0]?.includes?.('supabase')) {
+      originalConsoleDebug.apply(console, args);
     }
-    return `${prefix} ${message}`;
-  }
-
-  error(category, message, data) {
-    if (this._shouldLog(LogLevel.ERROR, category)) {
-      console.error(this._formatMessage(category, message, data));
-    }
-  }
-
-  warn(category, message, data) {
-    if (this._shouldLog(LogLevel.WARN, category)) {
-      console.warn(this._formatMessage(category, message, data));
-    }
-  }
-
-  info(category, message, data) {
-    if (this._shouldLog(LogLevel.INFO, category)) {
-      console.info(this._formatMessage(category, message, data));
-    }
-  }
-
-  debug(category, message, data) {
-    if (this._shouldLog(LogLevel.DEBUG, category)) {
-      console.debug(this._formatMessage(category, message, data));
-    }
-  }
-
-  trace(category, message, data) {
-    if (this._shouldLog(LogLevel.TRACE, category)) {
-      console.debug(this._formatMessage(category, message, data));
-    }
-  }
-
-  // Performance logging helper
-  perf(label, data) {
-    this.debug(LogCategory.PERF, label, data);
-  }
-}
-
-// Create singleton instance
-export const logger = new Logger();
-
-// Development helper to expose logger controls to console
-if (process.env.NODE_ENV === 'development') {
-  window.logger = logger;
-  console.info(`
-Logger available in console as 'logger':
-- logger.setLevel(LogLevel.INFO)
-- logger.enableCategory('auth')
-- logger.disableCategory('auth')
-  `);
+  };
 }
 
 export default logger; 

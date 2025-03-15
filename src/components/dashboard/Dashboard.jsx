@@ -13,7 +13,7 @@ import locations from '../../locations.json';
 import LocationReport from '../reports/LocationReport';
 import { withErrorBoundary } from '../common/ErrorBoundary';
 import { useAuth } from '../../context/AuthContext';
-import { logger, LogCategory, LogLevel } from '../../utils/logger';
+import { logger } from '../../utils/logger';
 import ErrorDashboard from '../error/ErrorDashboard';
 
 // Components
@@ -99,7 +99,7 @@ function Dashboard() {
     const initializeDashboard = async () => {
       // Only run once per app lifetime and after auth is initialized
       if (!window.__DASHBOARD_INITIALIZED && isInitialized) {
-        logger.info(LogCategory.UI, 'Initializing dashboard');
+        logger.info(ErrorCategory.UI, 'Initializing dashboard');
         
         try {
           // Set global flag before async operations to prevent race conditions
@@ -121,9 +121,9 @@ function Dashboard() {
             }
           );
           
-          logger.info(LogCategory.UI, 'Dashboard initialization complete');
+          logger.info(ErrorCategory.UI, 'Dashboard initialization complete');
         } catch (error) {
-          logger.error(LogCategory.UI, 'Dashboard initialization failed', error);
+          logger.error(ErrorCategory.UI, 'Dashboard initialization failed', error);
           handleError(
             error,
             'Dashboard.initialization',
@@ -153,7 +153,7 @@ function Dashboard() {
   useEffect(() => {
     // Only proceed if initialization complete and year has actually changed
     if (window.__DASHBOARD_INITIALIZED && selectedYear !== prevYearRef.current && isInitialized) {
-      logger.info(LogCategory.DATA, `Selected year changed: ${prevYearRef.current} -> ${selectedYear}`);
+      logger.info(ErrorCategory.DATA, `Selected year changed: ${prevYearRef.current} -> ${selectedYear}`);
       
       const reloadData = async () => {
         try {
@@ -181,7 +181,7 @@ function Dashboard() {
           // Update the ref to the new year
           prevYearRef.current = selectedYear;
         } catch (error) {
-          logger.error(LogCategory.DATA, 'Failed to load data for new year', {
+          logger.error(ErrorCategory.DATA, 'Failed to load data for new year', {
             error,
             previousYear: prevYearRef.current,
             newYear: selectedYear
