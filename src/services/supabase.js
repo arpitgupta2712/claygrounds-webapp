@@ -20,19 +20,18 @@ if (!supabaseUrl || !supabaseAnonKey) {
 const getRedirectUrl = () => {
   if (typeof window === 'undefined') return siteUrl;
   
-  // Always use the current origin for auth redirects
   const redirectBase = window.location.origin;
-  return `${redirectBase}${ROUTES.AUTH_REDIRECT}`;
+  const redirectPath = ROUTES.AUTH_REDIRECT;
+  const fullRedirectUrl = `${redirectBase}${redirectPath}`;
+  
+  logger.debug(ErrorCategory.AUTH, 'Generated redirect URL', {
+    base: redirectBase,
+    path: redirectPath,
+    full: fullRedirectUrl
+  });
+  
+  return fullRedirectUrl;
 };
-
-// Debug logging
-logger.debug(ErrorCategory.AUTH, 'Supabase Configuration', {
-  environment: isDevelopment ? 'development' : 'production',
-  siteUrl,
-  redirectUrl: getRedirectUrl(),
-  hasSupabaseUrl: !!supabaseUrl,
-  hasSupabaseKey: !!supabaseAnonKey
-});
 
 // Initialize Supabase client with minimal configuration
 export const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
@@ -42,42 +41,68 @@ export const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
     detectSessionInUrl: true,
     storage: typeof window !== 'undefined' ? window.localStorage : null,
     storageKey: 'supabase-auth-token',
-    redirectTo: getRedirectUrl()
+    redirectTo: getRedirectUrl(),
+    flowType: 'implicit' // Explicitly set to implicit flow
   }
 });
 
-// Log initialization
-logger.info(ErrorCategory.AUTH, 'Supabase Client Initialized', {
-  timestamp: new Date().toISOString(),
+// Debug logging for initial setup
+logger.debug(ErrorCategory.AUTH, 'Supabase Configuration', {
   environment: isDevelopment ? 'development' : 'production',
-  redirectUrl: getRedirectUrl()
+  siteUrl,
+  redirectUrl: getRedirectUrl(),
+  hasSupabaseUrl: !!supabaseUrl,
+  hasSupabaseKey: !!supabaseAnonKey,
+  flowType: 'implicit'
 });
 
-// Verify the client is working with role check
+// Set up auth state change listener immediately
+supabaseClient.auth.onAuthStateChange((event, session) => {
+  logger.info(ErrorCategory.AUTH, `Auth state changed: ${event}`, {
+    event,
+    hasSession: !!session,
+    userId: session?.user?.id
+  });
+});
+
+// Initial session check
 (async () => {
   try {
     const { data: { session }, error } = await supabaseClient.auth.getSession();
+    
     if (error) {
-      console.error('[SupabaseService] Initial session check failed:', error);
-    } else if (session) {
-      // Get user role and permissions
+      logger.error(ErrorCategory.AUTH, 'Initial session check failed', {
+        error: error.message,
+        status: error.status
+      });
+      return;
+    }
+    
+    if (session) {
       const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
       
       if (userError) {
-        console.error('[SupabaseService] Error getting user details:', userError);
-      } else {
-        console.log('[SupabaseService] Initial session check successful:', {
-          role: user?.role || 'authenticated',
-          id: user?.id,
-          email: user?.email,
-          hasSession: true
+        logger.error(ErrorCategory.AUTH, 'Error getting user details', {
+          error: userError.message,
+          sessionId: session.id
         });
+        return;
       }
+      
+      logger.info(ErrorCategory.AUTH, 'Session check successful', {
+        role: user?.role || 'authenticated',
+        id: user?.id,
+        email: user?.email,
+        hasSession: true
+      });
     } else {
-      console.log('[SupabaseService] No active session');
+      logger.info(ErrorCategory.AUTH, 'No active session');
     }
   } catch (err) {
-    console.error('[SupabaseService] Error during initial session check:', err);
+    logger.error(ErrorCategory.AUTH, 'Error during session check', {
+      error: err.message,
+      stack: isDevelopment ? err.stack : undefined
+    });
   }
 })();
 
