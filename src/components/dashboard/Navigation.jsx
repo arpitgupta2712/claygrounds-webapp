@@ -13,7 +13,8 @@ const PATH_TO_VIEW = {
   'sports': ViewTypes.SPORTS,
   'status': ViewTypes.STATUS,
   'source': ViewTypes.SOURCE,
-  'payments': ViewTypes.PAYMENTS
+  'payments': ViewTypes.PAYMENTS,
+  'errors': ViewTypes.ERROR_DASHBOARD
 };
 
 // Category options with their paths and labels
@@ -172,6 +173,18 @@ function Navigation({ onViewChange }) {
           aria-current={currentView === ViewTypes.PAYMENTS ? 'page' : undefined}
         >
           Payments
+        </NavLink>
+
+        <NavLink
+          to="/dashboard/errors"
+          className={({ isActive }) => 
+            `text-text-light py-3 px-6 rounded transition-colors min-w-[120px] text-center font-medium
+             hover:bg-gray-100 hover:text-primary
+             ${isActive ? 'bg-primary text-white shadow-md' : ''}`
+          }
+          aria-current={currentView === ViewTypes.ERROR_DASHBOARD ? 'page' : undefined}
+        >
+          Error Logs
         </NavLink>
         
         {/* Categories Dropdown */}

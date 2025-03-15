@@ -10,6 +10,7 @@ export const ROUTES = {
   TABLE_VIEW: '/dashboard/table',
   CATEGORY_VIEW: '/dashboard/category',
   PAYMENTS_VIEW: '/dashboard/payments',
+  ERROR_DASHBOARD: '/dashboard/errors',
 
   // Default redirect after authentication
   AUTH_REDIRECT: '/dashboard/table'

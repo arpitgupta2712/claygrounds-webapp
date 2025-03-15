@@ -14,6 +14,7 @@ import LocationReport from '../reports/LocationReport';
 import { withErrorBoundary } from '../common/ErrorBoundary';
 import { useAuth } from '../../context/AuthContext';
 import { logger, LogCategory, LogLevel } from '../../utils/logger';
+import ErrorDashboard from '../error/ErrorDashboard';
 
 // Components
 import Header from './Header';
@@ -270,6 +271,7 @@ function Dashboard() {
               <Route path="status" element={<CategoryView type="status" />} />
               <Route path="source" element={<CategoryView type="source" />} />
               <Route path="payments" element={<PaymentsView />} />
+              <Route path="errors" element={<ErrorDashboard />} />
               <Route path="reports/:facilityId" element={<LocationReportWrapper />} />
               <Route index element={<Navigate to="table" replace />} />
               <Route path="*" element={

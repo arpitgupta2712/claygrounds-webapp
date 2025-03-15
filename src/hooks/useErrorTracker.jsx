@@ -3,12 +3,14 @@ import { ErrorSeverity, ErrorCategory } from '../utils/errorTypes';
 import { createPortal } from 'react-dom';
 import { useToast } from './useToast';
 
-// Global error store
+// Global error store with enhanced functionality
 const errorStore = {
   errors: [],
   maxErrors: 100,
   consoleLogging: true,
   criticalErrorCallback: null,
+  errorSubscribers: new Set(),
+  errorAggregates: new Map(), // Store error aggregates
   
   getUserInfo() {
     return {
@@ -38,6 +40,55 @@ const errorStore = {
         return 'log';
     }
   },
+
+  // New method to aggregate similar errors
+  aggregateError(errorInfo) {
+    const key = `${errorInfo.message}:${errorInfo.context}:${errorInfo.category}`;
+    const existing = this.errorAggregates.get(key);
+    
+    if (existing) {
+      existing.count++;
+      existing.lastOccurrence = errorInfo.timestamp;
+      existing.occurrences.push(errorInfo.timestamp);
+      
+      // Keep only last 10 occurrences
+      if (existing.occurrences.length > 10) {
+        existing.occurrences.shift();
+      }
+      
+      // Calculate frequency (errors per hour)
+      const hourInMs = 60 * 60 * 1000;
+      const now = new Date().getTime();
+      const recentOccurrences = existing.occurrences.filter(
+        time => (now - new Date(time).getTime()) <= hourInMs
+      );
+      existing.frequency = recentOccurrences.length;
+      
+      this.errorAggregates.set(key, existing);
+      return existing;
+    } else {
+      const newAggregate = {
+        id: errorInfo.id,
+        message: errorInfo.message,
+        context: errorInfo.context,
+        category: errorInfo.category,
+        severity: errorInfo.severity,
+        firstOccurrence: errorInfo.timestamp,
+        lastOccurrence: errorInfo.timestamp,
+        occurrences: [errorInfo.timestamp],
+        count: 1,
+        frequency: 1
+      };
+      this.errorAggregates.set(key, newAggregate);
+      return newAggregate;
+    }
+  },
+  
+  // New method to check if error rate is concerning
+  isErrorRateConcerning(aggregate) {
+    // Alert if more than 10 errors of same type per hour
+    return aggregate.frequency >= 10;
+  },
   
   init(options = {}) {
     console.log('[ErrorTracker] Initializing with options:', options);
@@ -45,6 +96,23 @@ const errorStore = {
     if (options.maxErrors !== undefined) this.maxErrors = options.maxErrors;
     if (options.consoleLogging !== undefined) this.consoleLogging = options.consoleLogging;
     if (options.criticalErrorCallback) this.criticalErrorCallback = options.criticalErrorCallback;
+  },
+
+  // New method to subscribe to error updates
+  subscribe(callback) {
+    this.errorSubscribers.add(callback);
+    return () => this.errorSubscribers.delete(callback);
+  },
+
+  // New method to notify subscribers
+  notifySubscribers(errorInfo) {
+    this.errorSubscribers.forEach(callback => {
+      try {
+        callback(errorInfo);
+      } catch (error) {
+        console.error('[ErrorTracker] Error in subscriber callback:', error);
+      }
+    });
   }
 };
 
@@ -58,7 +126,7 @@ if (typeof window !== 'undefined') {
       ErrorSeverity.ERROR,
       ErrorCategory.UI
     );
-    return false; // Don't prevent default error handling
+    return false;
   });
   
   window.addEventListener('unhandledrejection', (event) => {
@@ -69,11 +137,11 @@ if (typeof window !== 'undefined') {
       ErrorSeverity.ERROR,
       ErrorCategory.UI
     );
-    return false; // Don't prevent default error handling
+    return false;
   });
 }
 
-// Global track error function
+// Global track error function with enhanced aggregation
 function trackErrorGlobal(error, context, severity, category, metadata = {}) {
   // Handle null errors (used for logging non-error events)
   if (!error && severity === ErrorSeverity.INFO) {
@@ -89,7 +157,6 @@ function trackErrorGlobal(error, context, severity, category, metadata = {}) {
       userInfo: errorStore.getUserInfo()
     };
 
-    // Console logging if enabled
     if (errorStore.consoleLogging) {
       console.groupCollapsed(`[${context}][${severity}][${category}] ${errorInfo.message}`);
       console.info('Event details:', errorInfo);
@@ -99,7 +166,6 @@ function trackErrorGlobal(error, context, severity, category, metadata = {}) {
     return errorInfo;
   }
 
-  // Create error object if string was passed
   const errorObj = typeof error === 'string' ? new Error(error) : error;
   
   const errorInfo = {
@@ -114,7 +180,6 @@ function trackErrorGlobal(error, context, severity, category, metadata = {}) {
     userInfo: errorStore.getUserInfo()
   };
 
-  // Console logging if enabled
   if (errorStore.consoleLogging) {
     const consoleMethod = errorStore.getConsoleMethod(severity);
     console.groupCollapsed(`[${context}][${severity}][${category}] ${errorInfo.message}`);
@@ -130,14 +195,20 @@ function trackErrorGlobal(error, context, severity, category, metadata = {}) {
     errorStore.errors.pop();
   }
 
-  // Handle critical errors
-  if (severity === ErrorSeverity.CRITICAL && errorStore.criticalErrorCallback) {
+  // Aggregate error and check frequency
+  const aggregate = errorStore.aggregateError(errorInfo);
+  
+  // Handle critical errors and high-frequency errors
+  if (severity === ErrorSeverity.CRITICAL || errorStore.isErrorRateConcerning(aggregate)) {
     try {
-      errorStore.criticalErrorCallback(errorInfo);
+      errorStore.criticalErrorCallback?.(errorInfo, aggregate);
     } catch (callbackError) {
       console.error('[ErrorTracker] Error in critical error callback:', callbackError);
     }
   }
+
+  // Notify subscribers
+  errorStore.notifySubscribers(errorInfo);
 
   return errorInfo;
 }
@@ -146,7 +217,6 @@ function trackErrorGlobal(error, context, severity, category, metadata = {}) {
 export function ErrorMessage({ error, onClose }) {
   if (!error) return null;
   
-  // Customize message based on severity
   let errorTitle = 'Notice';
   if (error.severity === ErrorSeverity.WARNING) errorTitle = 'Warning';
   if (error.severity === ErrorSeverity.ERROR) errorTitle = 'Error';
@@ -195,7 +265,7 @@ export function ErrorMessage({ error, onClose }) {
   );
 }
 
-// Custom hook for error tracking
+// Enhanced useErrorTracker hook
 export function useErrorTracker() {
   const [visibleError, setVisibleError] = useState(null);
   const { showToast } = useToast();
@@ -240,22 +310,26 @@ export function useErrorTracker() {
     errorStore.init({
       maxErrors: 100,
       consoleLogging: true,
-      criticalErrorCallback: (errorInfo) => {
-        console.error('[ErrorTracker] Critical error:', errorInfo);
-        displayError(errorInfo);
+      criticalErrorCallback: (errorInfo, aggregate) => {
+        console.error('[ErrorTracker] Critical/High-Frequency error:', errorInfo);
+        console.error('Error aggregate:', aggregate);
+        displayError({
+          ...errorInfo,
+          message: aggregate.count > 1 
+            ? `${errorInfo.message} (Occurred ${aggregate.count} times in the last hour)`
+            : errorInfo.message
+        });
       }
     });
-    
-    return () => {
-      // No cleanup needed
-    };
   }, [displayError]);
   
   return { 
     trackError,
     errors: errorStore.errors,
+    errorAggregates: Array.from(errorStore.errorAggregates.values()),
     visibleError,
-    closeError
+    closeError,
+    subscribe: errorStore.subscribe.bind(errorStore)
   };
 }
 

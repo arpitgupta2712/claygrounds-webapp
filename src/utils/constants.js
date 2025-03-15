@@ -10,7 +10,8 @@ export const ViewTypes = {
     SPORTS: 'sports',
     STATUS: 'status',
     SOURCE: 'source',
-    PAYMENTS: 'payments'
+    PAYMENTS: 'payments',
+    ERROR_DASHBOARD: 'errors'
 };
   
 /**
