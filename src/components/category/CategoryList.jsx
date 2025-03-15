@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import { useApp } from '../../context/AppContext';
 import { useErrorTracker } from '../../hooks/useErrorTracker';
@@ -15,7 +15,7 @@ import EmptyState from '../common/EmptyState';
  * @param {string} props.type - Category type (locations, months, sports, status)
  * @param {Function} props.onCategorySelect - Callback when a category is selected
  */
-function CategoryList({ type, onCategorySelect }) {
+const CategoryList = React.memo(function CategoryList({ type, onCategorySelect }) {
   const [categories, setCategories] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -24,128 +24,82 @@ function CategoryList({ type, onCategorySelect }) {
   const { trackError } = useErrorTracker();
   
   // Get category configuration based on type
-  const config = categoryConfigs[type];
+  const config = useMemo(() => categoryConfigs[type], [type]);
   
-  useEffect(() => {
-    const loadCategories = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
-        
-        // Set current category type in app context
-        setCategoryType(type);
-        
-        if (!config) {
-          throw new Error(`Invalid category type: ${type}`);
-        }
-        
-        if (!filteredData || filteredData.length === 0) {
-          setCategories([]);
-          return;
-        }
-        
-        console.log(`[CategoryList] Loading categories for type: ${type}`);
-        
-        // Extract unique categories from data
-        let categoryValues = dataUtils.getUniqueValues(filteredData, config.valueField);
-        
-        // Apply sort order if specified in config
-        if (config.sortOrder) {
-          categoryValues = categoryValues.sort((a, b) => {
-            return config.sortOrder.indexOf(a) - config.sortOrder.indexOf(b);
-          });
-        }
-        
-        console.log(`[CategoryList] Found ${categoryValues.length} categories`);
-        
-        setCategories(categoryValues);
-      } catch (error) {
-        console.error(`[CategoryList] Error loading categories: ${error.message}`);
-        setError(error.message);
-        
-        trackError(
-          error,
-          'CategoryList.loadCategories',
-          ErrorSeverity.ERROR,
-          ErrorCategory.DATA,
-          { type }
-        );
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  // Memoize the loadCategories function
+  const loadCategories = useCallback(async () => {
+    if (!filteredData || !config) return;
     
-    loadCategories();
-  }, [type, filteredData, config, setCategoryType, trackError]);
-  
-  // Handle category selection
-  const handleCategoryClick = (category) => {
-    if (onCategorySelect) {
-      console.log(`[CategoryList] Category selected: ${category}`);
-      onCategorySelect(category);
+    try {
+      setIsLoading(true);
+      const categorizedData = await dataUtils.categorizeData(filteredData, type);
+      setCategories(categorizedData);
+    } catch (error) {
+      setError(error);
+      trackError(error, 'CategoryList.loadCategories', ErrorSeverity.ERROR, ErrorCategory.DATA);
+    } finally {
+      setIsLoading(false);
     }
-  };
-  
-  // If type is invalid
-  if (!config) {
-    return (
-      <EmptyState.Error
-        title="Invalid Category Type"
-        message={`The category type '${type}' is not valid or not configured.`}
-      />
-    );
-  }
-  
-  // Display loading state
-  if (isLoading) {
-    return <Loading message={`Loading ${config.category} data...`} />;
-  }
-  
-  // Display error state
+  }, [filteredData, type, config, trackError]);
+
+  // Load categories when filteredData or type changes
+  useEffect(() => {
+    loadCategories();
+  }, [loadCategories]);
+
+  // Memoize the handleCardClick callback
+  const handleCardClick = useCallback((category) => {
+    setCategoryType(type);
+    onCategorySelect?.(category);
+  }, [type, onCategorySelect, setCategoryType]);
+
   if (error) {
     return (
-      <EmptyState.Error
-        title={`Error Loading ${config.category} Data`}
-        message={error}
+      <EmptyState
+        title="Error Loading Categories"
+        message={error.message}
+        icon="error"
       />
     );
   }
-  
-  // Display empty state if no categories found
-  if (categories.length === 0) {
+
+  if (isLoading) {
+    return <Loading message="Loading categories..." />;
+  }
+
+  if (!categories.length) {
     return (
       <EmptyState
-        title={`No ${config.category} Data`}
-        message={`There are no ${config.category.toLowerCase()} categories to display.`}
+        title="No Categories Found"
+        message="There are no categories to display for the selected filters."
       />
     );
   }
 
-  return (
-    <div>
-      {/* Category title */}
-      <h2 className="text-xl text-primary font-semibold mb-6">
-        {config.category} Overview
-      </h2>
-      
-      {/* Category grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 3xl:grid-cols-3 gap-6">
-        {categories.map((category) => (
-          <div key={category} className="aspect-[3/2]">
-            <CategoryCard
-              category={category}
-              config={config}
-              onClick={() => handleCategoryClick(category)}
-            />
-          </div>
-        ))}
-      </div>
+  // Memoize the grid of CategoryCards
+  const categoryGrid = useMemo(() => (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {categories.map((category) => (
+        <div
+          key={category.id}
+          onClick={() => handleCardClick(category)}
+          className="cursor-pointer"
+        >
+          <CategoryCard
+            title={category.name}
+            stats={category.stats}
+            config={config}
+          />
+        </div>
+      ))}
     </div>
-  );
-}
+  ), [categories, config, handleCardClick]);
+
+  return categoryGrid;
+});
 
 CategoryList.propTypes = {
-  type: PropTypes.oneOf(['locations', 'months', 'sports', 'status', 'source']).isRequired,
+  type: PropTypes.string.isRequired,
   onCategorySelect: PropTypes.func
 };
 

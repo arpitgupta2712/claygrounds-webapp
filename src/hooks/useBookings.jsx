@@ -30,7 +30,7 @@ export const useBookings = () => {
    * @param {string} groupBy - Parameter to group by
    * @param {Array} data - Data to group (optional)
    */
-  const groupData = useCallback((groupBy, data = filteredData) => {
+  const groupData = useCallback(async (groupBy, data = filteredData) => {
     if (!data?.length) return;
 
     try {
@@ -46,46 +46,42 @@ export const useBookings = () => {
         normalizedGroupBy = groupBy.replace(/s$/, '');
       }
       
-      console.log(`[useBookings] Grouping data by: ${normalizedGroupBy} (original: ${groupBy})`);
-      
+      // Use memoized grouping functions
       switch (normalizedGroupBy) {
         case 'date':
-          grouped = groupingService.groupByDate(data, 'day');
+          grouped = await groupingService.groupByDate(data, 'day');
           break;
         case 'month':
-          grouped = groupingService.groupByDate(data, 'month');
+          grouped = await groupingService.groupByDate(data, 'month');
           break;
         case 'year':
-          grouped = groupingService.groupByDate(data, 'year');
+          grouped = await groupingService.groupByDate(data, 'year');
           break;
         case 'location':
-          grouped = groupingService.groupByLocation(data);
+          grouped = await groupingService.groupByLocation(data);
           break;
         case 'source':
-          grouped = groupingService.groupBySource(data);
+          grouped = await groupingService.groupBySource(data);
           break;
         case 'sport':
-          grouped = groupingService.groupBySport(data);
+          grouped = await groupingService.groupBySport(data);
           break;
         case 'status':
-          grouped = groupingService.groupByStatus(data);
+          grouped = await groupingService.groupByStatus(data);
           break;
         case 'payment':
-          grouped = groupingService.groupByPaymentMode(data);
+          grouped = await groupingService.groupByPaymentMode(data);
           break;
         default:
-          console.warn(`[useBookings] Unknown grouping parameter: ${groupBy}`);
           return;
       }
       
       // Store the result using the original groupBy parameter
-      // This ensures we don't overwrite previously grouped data for other types
       setGroupedData(prev => ({
         ...prev,
         [groupBy]: grouped
       }));
     } catch (error) {
-      console.error('[useBookings] Error grouping data:', error);
       trackError(
         error,
         'useBookings.groupData',
@@ -104,13 +100,11 @@ export const useBookings = () => {
   const loadBookings = useCallback(async (year, forceRefresh = false) => {
     // Skip if already loading
     if (isLoading) {
-      console.log('[useBookings] Already loading data, skipping request');
       return;
     }
 
     // Skip if we already have data and no force refresh
     if (!forceRefresh && bookingsData?.length > 0 && year === selectedYear) {
-      console.log('[useBookings] Data already loaded for year', year);
       return;
     }
     
@@ -133,8 +127,6 @@ export const useBookings = () => {
         throw new Error('Invalid bookings data format');
       }
       
-      console.log(`[useBookings] Loaded ${bookings.length} bookings for year ${year}`);
-      
       // Update state with the validated data
       batchUpdate({
         bookingsData: bookings,
@@ -149,17 +141,18 @@ export const useBookings = () => {
       
       // Group the data by default categories (only if data changed)
       if (bookings !== bookingsData) {
-        console.log('[useBookings] Data changed, updating groups');
-        groupData('locations', bookings);
-        groupData('months', bookings);
-        groupData('sports', bookings);
-        groupData('status', bookings);
-        groupData('source', bookings);
-        groupData('payment', bookings);
+        // Use Promise.all to parallelize grouping operations
+        await Promise.all([
+          groupData('locations', bookings),
+          groupData('months', bookings),
+          groupData('sports', bookings),
+          groupData('status', bookings),
+          groupData('source', bookings),
+          groupData('payment', bookings)
+        ]);
       }
       
     } catch (error) {
-      console.error('[useBookings] Error loading bookings:', error);
       batchUpdate({
         bookingsData: [],
         filteredData: [],
@@ -180,13 +173,10 @@ export const useBookings = () => {
    */
   const applyFilter = useCallback((filterType, filterValue) => {
     if (!bookingsData || bookingsData.length === 0) {
-      console.warn('[useBookings] No data available to filter');
       return;
     }
     
     try {
-      console.log(`[useBookings] Applying filter: ${filterType}`, filterValue);
-      
       // Apply the filter
       const newFilteredData = filterService.applyFilters(
         bookingsData,
@@ -199,23 +189,23 @@ export const useBookings = () => {
         ? sortService.sortData(newFilteredData, sortField, sortDirection)
         : newFilteredData;
       
-      // Group the filtered data
-      console.log('[useBookings] Regrouping data after applying filter');
-      groupData('locations', sortedData);
-      groupData('months', sortedData);
-      groupData('sports', sortedData);
-      groupData('status', sortedData);
-      groupData('source', sortedData);
-      groupData('payment', sortedData);
+      // Group the filtered data asynchronously
+      Promise.all([
+        groupData('locations', sortedData),
+        groupData('months', sortedData),
+        groupData('sports', sortedData),
+        groupData('status', sortedData),
+        groupData('source', sortedData),
+        groupData('payment', sortedData)
+      ]);
       
       // Update state
       batchUpdate({
         filteredData: sortedData,
         activeFilters: { type: filterType, value: filterValue },
-        currentPage: 1 // Reset to first page
+        currentPage: 1
       });
     } catch (error) {
-      console.error('[useBookings] Error applying filter:', error);
       setError(error.message);
       trackError(
         error,
@@ -232,8 +222,6 @@ export const useBookings = () => {
    */
   const clearFilters = useCallback(() => {
     try {
-      console.log('[useBookings] Clearing filters');
-      
       // Apply any sorting to the original data
       const sortedData = sortField 
         ? sortService.sortData(bookingsData, sortField, sortDirection)
@@ -243,10 +231,9 @@ export const useBookings = () => {
       batchUpdate({
         filteredData: sortedData,
         activeFilters: { type: null, value: null },
-        currentPage: 1 // Reset to first page
+        currentPage: 1
       });
     } catch (error) {
-      console.error('[useBookings] Error clearing filters:', error);
       setError(error.message);
       trackError(
         error,
@@ -263,13 +250,10 @@ export const useBookings = () => {
    */
   const applySorting = useCallback((field) => {
     if (!filteredData || filteredData.length === 0) {
-      console.warn('[useBookings] No data available to sort');
       return;
     }
     
     try {
-      console.log(`[useBookings] Applying sorting on field: ${field}`);
-      
       // Determine the next sort direction
       const nextDirection = sortService.getNextSortDirection(
         sortField,
@@ -291,7 +275,6 @@ export const useBookings = () => {
         sortDirection: nextDirection
       });
     } catch (error) {
-      console.error('[useBookings] Error applying sorting:', error);
       setError(error.message);
       trackError(
         error,
@@ -308,10 +291,8 @@ export const useBookings = () => {
    */
   const refreshData = useCallback(async () => {
     try {
-      console.log('[useBookings] Refreshing booking data');
       return await loadBookings(selectedYear, true); // Force refresh
     } catch (error) {
-      console.error('[useBookings] Error refreshing data:', error);
       setError(error.message);
       trackError(
         error,
@@ -342,7 +323,7 @@ export const useBookings = () => {
   
   return {
     bookingsData,
-    filteredData,
+    filteredData: memoizedFilteredData,
     groupedData,
     isLoading,
     error,
@@ -353,4 +334,4 @@ export const useBookings = () => {
     refreshData,
     groupData
   };
-}
+};

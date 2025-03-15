@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import PropTypes from 'prop-types';
 import { formatUtils } from '../../utils/formatUtils';
 import Tooltip from '../common/Tooltip';
@@ -10,16 +10,14 @@ import Tooltip from '../common/Tooltip';
  * @param {Object} props.stats - Category statistics
  * @param {Object} props.config - Category configuration
  */
-function CategoryCard({ title, stats, config }) {
-  console.log(`[CategoryCard] Rendering card for ${title}:`, { stats, config });
-
+const CategoryCard = React.memo(function CategoryCard({ title, stats, config }) {
+  // Remove console.log to reduce memory usage
   if (!stats) {
-    console.warn(`[CategoryCard] No stats provided for ${title}`);
     return null;
   }
 
-  // Helper function to format stat value
-  const formatStatValue = (value) => {
+  // Memoize the formatStatValue function
+  const formatStatValue = useCallback((value) => {
     if (value === undefined || value === null) return 'N/A';
     
     // If value is an object with displayText, use that
@@ -38,7 +36,25 @@ function CategoryCard({ title, stats, config }) {
     
     // Return as is for strings
     return value;
-  };
+  }, []);
+
+  // Memoize extra stats calculations
+  const extraStats = useMemo(() => {
+    if (!config?.extraStats) return [];
+    return config.extraStats.map(extraStat => {
+      const value = stats[extraStat.label];
+      if (value === undefined) return null;
+      
+      return (
+        <div key={extraStat.label} className="flex justify-between">
+          <span className="text-text-medium">{extraStat.label}</span>
+          <span className="font-semibold text-text-dark">
+            {formatStatValue(value)}
+          </span>
+        </div>
+      );
+    }).filter(Boolean);
+  }, [config?.extraStats, stats, formatStatValue]);
 
   return (
     <div className="bg-white p-7 rounded-md shadow transition-all duration-300 border border-gray-100 
@@ -87,24 +103,19 @@ function CategoryCard({ title, stats, config }) {
           </div>
         )}
         
-        {/* Display any custom statistics if available */}
-        {config?.extraStats?.map(extraStat => {
-          const value = stats[extraStat.label];
-          if (value === undefined) return null;
-          
-          return (
-            <div key={extraStat.label} className="flex justify-between">
-              <span className="text-text-medium">{extraStat.label}</span>
-              <span className="font-semibold text-text-dark">
-                {formatStatValue(value)}
-              </span>
-            </div>
-          );
-        })}
+        {/* Display memoized extra stats */}
+        {extraStats}
       </div>
     </div>
   );
-}
+}, (prevProps, nextProps) => {
+  // Custom comparison function for memo
+  return (
+    prevProps.title === nextProps.title &&
+    JSON.stringify(prevProps.stats) === JSON.stringify(nextProps.stats) &&
+    JSON.stringify(prevProps.config) === JSON.stringify(nextProps.config)
+  );
+});
 
 CategoryCard.propTypes = {
   title: PropTypes.string.isRequired,

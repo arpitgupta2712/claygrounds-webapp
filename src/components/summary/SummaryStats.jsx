@@ -8,32 +8,16 @@ import StatsCard from './StatsCard';
 import Loading from '../common/Loading';
 import PropTypes from 'prop-types';
 import { withErrorBoundary } from '../common/ErrorBoundary';
+import React from 'react';
+import { useErrorTracker } from '../../hooks/useErrorTracker';
 
-function StatsFallback({ error }) {
-  return (
-    <div className="bg-error-light p-6 rounded-lg border border-error mb-6">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center space-x-3">
-          <svg className="w-6 h-6 text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <h3 className="text-lg font-semibold text-error">Statistics Error</h3>
-        </div>
-        <button
-          onClick={() => window.location.reload()}
-          className="px-3 py-1 bg-white text-error border border-error rounded hover:bg-error hover:text-white transition-colors"
-        >
-          Retry
-        </button>
-      </div>
-      <p className="text-gray-600">{error?.message || 'Error calculating statistics'}</p>
-    </div>
-  );
-}
-
-StatsFallback.propTypes = {
-  error: PropTypes.object
-};
+// Fallback component for error states
+const StatsFallback = ({ error }) => (
+  <div className="p-4 bg-error-light rounded-lg text-error">
+    <h3 className="font-semibold mb-2">Error Loading Statistics</h3>
+    <p className="text-sm">{error?.message || 'An unexpected error occurred'}</p>
+  </div>
+);
 
 /**
  * SummaryStats component for displaying booking statistics
@@ -252,85 +236,74 @@ function SummaryStats() {
 }
 
 /**
- * SummaryStats component with custom statistics
- * @param {Object} props - Component props
- * @param {Object} props.customStats - Custom statistics object to display
- * @param {string[]} props.statsToShow - Array of stat keys to show
- * @param {string} props.className - Additional CSS classes
+ * CustomSummaryStats component for displaying custom statistics
  */
-const CustomSummaryStats = memo(function CustomSummaryStats({ customStats, statsToShow, className = '' }) {
-  const { handleError } = useErrorHandler();
+const CustomSummaryStats = React.memo(function CustomSummaryStats({ 
+  customStats,
+  statsToShow,
+  className = ''
+}) {
+  const { trackError } = useErrorTracker();
 
-  // Filter stats to show if specified
+  // Memoize stats entries
   const statsEntries = useMemo(() => {
-    try {
-      if (!customStats) return [];
-      return statsToShow && statsToShow.length > 0
-        ? Object.entries(customStats).filter(([key]) => statsToShow.includes(key))
-        : Object.entries(customStats);
-    } catch (error) {
-      handleError(
-        error,
-        'CustomSummaryStats.filterStats',
-        ErrorSeverity.ERROR,
-        ErrorCategory.DATA,
-        { statsToShow }
-      );
-      return [];
-    }
-  }, [customStats, statsToShow, handleError]);
+    if (!customStats) return [];
+    return statsToShow 
+      ? Object.entries(customStats).filter(([key]) => statsToShow.includes(key))
+      : Object.entries(customStats);
+  }, [customStats, statsToShow]);
 
-  // If no stats, don't render anything
-  if (!customStats) {
-    return null;
-  }
+  // Memoize stats cards
+  const statsCards = useMemo(() => {
+    return statsEntries.map(([key, value]) => {
+      try {
+        // Skip functions and internal properties
+        if (typeof value === 'function' || key.startsWith('_')) {
+          return null;
+        }
+        
+        // Format the title from camelCase to Title Case
+        const title = key
+          .replace(/([A-Z])/g, ' $1')
+          .replace(/^./, str => str.toUpperCase());
+        
+        // Determine type based on key name or value type
+        let type = 'text';
+        if (typeof value === 'number') {
+          if (key.includes('revenue') || key.includes('paid') || 
+              key.includes('balance') || key.includes('price')) {
+            type = 'currency';
+          } else if (key.includes('rate') || key.includes('percentage')) {
+            type = 'percentage';
+          } else {
+            type = 'number';
+          }
+        }
+        
+        return (
+          <StatsCard
+            key={key}
+            title={title}
+            value={value}
+            type={type}
+          />
+        );
+      } catch (error) {
+        trackError(
+          error,
+          'CustomSummaryStats.renderStat',
+          ErrorSeverity.WARNING,
+          ErrorCategory.UI,
+          { key, valueType: typeof value }
+        );
+        return null;
+      }
+    }).filter(Boolean);
+  }, [statsEntries, trackError]);
 
   return (
     <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 ${className}`}>
-      {statsEntries.map(([key, value]) => {
-        try {
-          // Skip functions and internal properties
-          if (typeof value === 'function' || key.startsWith('_')) {
-            return null;
-          }
-          
-          // Format the title from camelCase to Title Case
-          const title = key
-            .replace(/([A-Z])/g, ' $1')
-            .replace(/^./, str => str.toUpperCase());
-          
-          // Determine type based on key name or value type
-          let type = 'text';
-          if (typeof value === 'number') {
-            if (key.includes('revenue') || key.includes('paid') || 
-                key.includes('balance') || key.includes('price')) {
-              type = 'currency';
-            } else if (key.includes('rate') || key.includes('percentage')) {
-              type = 'percentage';
-            } else {
-              type = 'number';
-            }
-          }
-          
-          return (
-            <StatsCard
-              key={key}
-              title={title}
-              value={value}
-              type={type}
-            />
-          );
-        } catch (error) {
-          handleError(
-            error,
-            'CustomSummaryStats.renderStat',
-            ErrorSeverity.WARNING,
-            ErrorCategory.UI,
-            { key, valueType: typeof value }
-          );
-          return null;
-        }
-      })}
+      {statsCards}
     </div>
   );
 });
@@ -355,7 +328,9 @@ const CustomSummaryStatsWithError = withErrorBoundary(
 );
 
 const SummaryStatsWithError = withErrorBoundary(
-  memo(SummaryStats),
+  React.memo(function SummaryStats(props) {
+    return <CustomSummaryStats {...props} />;
+  }),
   {
     fallback: StatsFallback,
     context: 'SummaryStats',
