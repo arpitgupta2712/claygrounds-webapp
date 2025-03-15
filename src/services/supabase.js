@@ -7,33 +7,41 @@ import { ROUTES, getFullUrl } from '../config/routes';
 const getEnvironmentInfo = () => {
   const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
   const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
-  const isNetlifyPreview = hostname.includes('netlify.app');
+  const isDevelopmentBranch = hostname === 'development--claygroundspartner.netlify.app';
+  const isNetlifyPreview = hostname.includes('netlify.app') && !isDevelopmentBranch;
   const configuredSiteUrl = import.meta.env.VITE_SITE_URL?.trim();
   const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
   
-  // For Netlify deploy previews, always use the current origin
-  // This ensures we handle dynamic preview URLs correctly
-  const effectiveSiteUrl = isNetlifyPreview 
-    ? currentOrigin 
-    : (configuredSiteUrl || currentOrigin);
+  // Determine the effective site URL based on environment
+  let effectiveSiteUrl;
+  if (isDevelopmentBranch) {
+    // Always use the fixed development URL
+    effectiveSiteUrl = 'https://development--claygroundspartner.netlify.app';
+  } else if (isNetlifyPreview) {
+    // For other preview deployments, use current origin
+    effectiveSiteUrl = currentOrigin;
+  } else {
+    // For production and local, use configured URL or fallback to origin
+    effectiveSiteUrl = configuredSiteUrl || currentOrigin;
+  }
   
-  // Log warning only if we're not in a preview and missing the URL
-  if (!configuredSiteUrl && !isNetlifyPreview) {
-    logger.warn(ErrorCategory.AUTH, 'Missing VITE_SITE_URL', { 
+  // Log warning only if we're in production and missing the URL
+  if (!configuredSiteUrl && !isNetlifyPreview && !isLocalhost && !isDevelopmentBranch) {
+    logger.warn(ErrorCategory.AUTH, 'Missing VITE_SITE_URL in production', { 
       hostname,
-      isNetlifyPreview,
-      usingOrigin: currentOrigin 
+      environment: 'production'
     });
   }
   
   return {
-    isDevelopment: isLocalhost || isNetlifyPreview || import.meta.env.VITE_APP_ENV === 'development',
-    isProduction: !isLocalhost && !isNetlifyPreview && import.meta.env.VITE_APP_ENV === 'production',
+    isDevelopment: isLocalhost || isNetlifyPreview || isDevelopmentBranch || import.meta.env.VITE_APP_ENV === 'development',
+    isProduction: !isLocalhost && !isNetlifyPreview && !isDevelopmentBranch && import.meta.env.VITE_APP_ENV === 'production',
     hostname,
     origin: currentOrigin,
     configuredSiteUrl,
     effectiveSiteUrl,
-    isNetlifyPreview
+    isNetlifyPreview,
+    isDevelopmentBranch
   };
 };
 
@@ -43,7 +51,16 @@ const env = getEnvironmentInfo();
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
 
-// Use the effective site URL which handles Netlify previews correctly
+// Validate Supabase key format
+if (supabaseAnonKey && (!supabaseAnonKey.includes('.') || supabaseAnonKey.split('.').length !== 3)) {
+  logger.error(ErrorCategory.AUTH, 'Invalid Supabase key format', {
+    keyLength: supabaseAnonKey.length,
+    hasCorrectParts: supabaseAnonKey.split('.').length === 3
+  });
+  throw new Error('Invalid Supabase key format: Should be a valid JWT token');
+}
+
+// Use the effective site URL which handles all environments correctly
 const siteUrl = env.effectiveSiteUrl;
 
 // Debug logging for environment setup
@@ -52,15 +69,15 @@ logger.debug(ErrorCategory.AUTH, 'Supabase Environment Setup', {
   hostname: env.hostname,
   isLocalhost: env.hostname === 'localhost',
   isNetlifyPreview: env.isNetlifyPreview,
+  isDevelopmentBranch: env.isDevelopmentBranch,
   configuredSiteUrl: env.configuredSiteUrl,
   effectiveSiteUrl: env.effectiveSiteUrl,
   actualSiteUrl: siteUrl,
   origin: env.origin,
-  usingConfiguredUrl: !!env.configuredSiteUrl,
-  isPreviewUrl: env.isNetlifyPreview
+  hasValidSupabaseKey: supabaseAnonKey?.split('.').length === 3
 });
 
-// Always use configured site URL for redirect in auth flow
+// Always use effective site URL for redirect in auth flow
 const redirectUrl = getFullUrl(ROUTES.AUTH_REDIRECT, siteUrl);
 
 // Validate environment variables
@@ -95,7 +112,10 @@ export const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
       'X-Client-Info': 'claygrounds-webapp',
       'X-Environment': env.isDevelopment ? 'development' : 'production',
       'X-Origin': env.origin,
-      'X-Site-URL': siteUrl
+      'X-Site-URL': siteUrl,
+      'X-Deploy-Type': env.isDevelopmentBranch ? 'development-branch' : 
+                      env.isNetlifyPreview ? 'preview' : 
+                      env.isProduction ? 'production' : 'local'
     }
   }
 });
