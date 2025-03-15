@@ -8,12 +8,19 @@ const getEnvironmentInfo = () => {
   const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
   const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
   const isNetlifyPreview = hostname.includes('netlify.app');
+  const configuredSiteUrl = import.meta.env.VITE_SITE_URL?.trim();
+  
+  // Validate site URL based on environment
+  if (!configuredSiteUrl) {
+    logger.warn(ErrorCategory.AUTH, 'Missing VITE_SITE_URL', { hostname });
+  }
   
   return {
     isDevelopment: isLocalhost || isNetlifyPreview || import.meta.env.VITE_APP_ENV === 'development',
     isProduction: !isLocalhost && !isNetlifyPreview && import.meta.env.VITE_APP_ENV === 'production',
     hostname,
-    origin: typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'
+    origin: typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000',
+    configuredSiteUrl
   };
 };
 
@@ -22,10 +29,9 @@ const env = getEnvironmentInfo();
 // Get and validate environment variables
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
-const configuredSiteUrl = import.meta.env.VITE_SITE_URL?.trim();
 
-// Use window.location.origin for preview/development, configured URL for production
-const siteUrl = env.isProduction ? configuredSiteUrl : env.origin;
+// Use configured site URL first, fallback to origin only if not set
+const siteUrl = env.configuredSiteUrl || env.origin;
 
 // Debug logging for environment setup
 logger.debug(ErrorCategory.AUTH, 'Supabase Environment Setup', {
@@ -33,12 +39,13 @@ logger.debug(ErrorCategory.AUTH, 'Supabase Environment Setup', {
   hostname: env.hostname,
   isLocalhost: env.hostname === 'localhost',
   isNetlifyPreview: env.hostname.includes('netlify.app'),
-  configuredSiteUrl,
+  configuredSiteUrl: env.configuredSiteUrl,
   actualSiteUrl: siteUrl,
-  origin: env.origin
+  origin: env.origin,
+  usingConfiguredUrl: !!env.configuredSiteUrl
 });
 
-// Always use current origin for redirect in auth flow
+// Always use configured site URL for redirect in auth flow
 const redirectUrl = getFullUrl(ROUTES.AUTH_REDIRECT, siteUrl);
 
 // Validate environment variables
@@ -65,14 +72,15 @@ export const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
     },
     storage: typeof window !== 'undefined' ? window.localStorage : null,
     storageKey: 'supabase-auth-token',
-    debug: env.isDevelopment, // Only enable debug in development
+    debug: env.isDevelopment,
     redirectTo: redirectUrl
   },
   global: {
     headers: {
       'X-Client-Info': 'claygrounds-webapp',
       'X-Environment': env.isDevelopment ? 'development' : 'production',
-      'X-Origin': env.origin
+      'X-Origin': env.origin,
+      'X-Site-URL': siteUrl
     }
   }
 });
@@ -83,7 +91,8 @@ logger.info(ErrorCategory.AUTH, 'Supabase Client Initialized', {
   environment: env.isDevelopment ? 'development' : 'production',
   redirectUrl,
   origin: env.origin,
-  isProduction: env.isProduction
+  isProduction: env.isProduction,
+  siteUrl
 });
 
 // Verify the client is working with role check
