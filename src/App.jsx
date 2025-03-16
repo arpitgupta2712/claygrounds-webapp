@@ -48,30 +48,28 @@ function AppFallback({ error }) {
 const AppWithErrorBoundary = withErrorBoundary(
   function App() {
     return (
-      <ErrorProvider>
-        <Router>
-          <AuthProvider>
-            <AppProvider>
-              <ErrorDisplay />
-              <ToastContainer />
-              {process.env.NODE_ENV === 'development' && (
-                <Suspense fallback={null}>
-                  <PerformanceMonitor />
-                </Suspense>
-              )}
-              <Routes>
-                <Route path="/login" element={<LoginPage />} />
-                <Route path="/dashboard/*" element={
-                  <ProtectedRoute>
-                    <Dashboard />
-                  </ProtectedRoute>
-                } />
-                <Route path="/" element={<Navigate to="/dashboard" replace />} />
-              </Routes>
-            </AppProvider>
-          </AuthProvider>
-        </Router>
-      </ErrorProvider>
+      <Router>
+        <AuthProvider>
+          <AppProvider>
+            <ErrorDisplay />
+            <ToastContainer />
+            {process.env.NODE_ENV === 'development' && (
+              <Suspense fallback={null}>
+                <PerformanceMonitor />
+              </Suspense>
+            )}
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/dashboard/*" element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              } />
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            </Routes>
+          </AppProvider>
+        </AuthProvider>
+      </Router>
     );
   },
   {
@@ -84,4 +82,13 @@ const AppWithErrorBoundary = withErrorBoundary(
   }
 );
 
-export default AppWithErrorBoundary;
+// Wrap the entire app with ErrorProvider
+function App() {
+  return (
+    <ErrorProvider>
+      <AppWithErrorBoundary />
+    </ErrorProvider>
+  );
+}
+
+export default App;

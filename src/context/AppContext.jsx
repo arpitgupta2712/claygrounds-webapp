@@ -24,8 +24,8 @@ const initialState = {
   },
   currentCategoryType: null,
   selectedCategory: null,
-  sortField: null,
-  sortDirection: 'desc',
+  sortField: 'S no',
+  sortDirection: 'asc',
 };
 
 // Action types
@@ -334,6 +334,7 @@ export function AppProvider({ children }) {
 
   const value = {
     ...state,
+    CONSTANTS,
     setBookingsData,
     setFilteredData,
     setCurrentPage,

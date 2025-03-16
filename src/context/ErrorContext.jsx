@@ -62,11 +62,13 @@ const ErrorContext = createContext(null);
  */
 export function ErrorProvider({ children }) {
   const [state, dispatch] = useReducer(errorReducer, initialState);
+  const errorCounter = React.useRef(0);
 
   // Add a new error to the state
   const addError = useCallback((error, context, severity = ErrorSeverity.ERROR, category = ErrorCategory.UI) => {
+    errorCounter.current += 1;
     const errorObject = {
-      id: Date.now(),
+      id: `${Date.now()}-${errorCounter.current}`,
       error: error instanceof Error ? error : new Error(error),
       message: error instanceof Error ? error.message : error,
       context,

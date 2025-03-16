@@ -5,6 +5,7 @@ import { useBookings } from '../../hooks/useBookings';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity, ErrorCategory } from '../../utils/errorTypes';
 import { formatUtils } from '../../utils/formatUtils';
+import { getStatusColor } from '../../utils/statusUtils';
 import EmptyState from '../common/EmptyState';
 import Tooltip from '../common/Tooltip';
 import { withErrorBoundary } from '../common/ErrorBoundary';
@@ -96,35 +97,35 @@ function BookingTable({ data, onRowClick, className = '' }) {
   const formatCellContent = useCallback((value, field) => {
     if (value === undefined || value === null) return '';
 
-    return handleAsync(
-      () => {
-        // Format based on field type
-        switch (field) {
-          case 'date':
-            return formatUtils.formatDate(value);
-          case 'time':
-            return formatUtils.formatTime(value);
-          case 'amount':
-            return formatUtils.formatCurrency(value);
-          case 'status':
-            return (
-              <span className={`inline-flex items-center px-2 py-1 rounded-full text-sm ${getStatusColor(value)}`}>
-                {value}
-              </span>
-            );
-          default:
-            return String(value);
-        }
-      },
-      'BookingTable.formatCellContent',
-      {
-        severity: ErrorSeverity.WARNING,
-        category: ErrorCategory.UI,
-        metadata: { field, valueType: typeof value },
-        rethrow: false
+    try {
+      // Format based on field type
+      switch (field) {
+        case 'date':
+          return formatUtils.formatDate(value);
+        case 'time':
+          return formatUtils.formatTime(value);
+        case 'amount':
+          return formatUtils.formatCurrency(value);
+        case 'status':
+          return (
+            <span className={`inline-flex items-center px-2 py-1 rounded-full text-sm ${getStatusColor(value)}`}>
+              {value}
+            </span>
+          );
+        default:
+          return String(value);
       }
-    ) || String(value); // Fallback to string if formatting fails
-  }, [handleAsync]);
+    } catch (error) {
+      handleError(
+        error,
+        'BookingTable.formatCellContent',
+        ErrorSeverity.WARNING,
+        ErrorCategory.UI,
+        { field, valueType: typeof value }
+      );
+      return String(value); // Fallback to string if formatting fails
+    }
+  }, [handleError]);
 
   /**
    * Handle row click with error handling

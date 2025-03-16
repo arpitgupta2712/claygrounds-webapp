@@ -140,9 +140,10 @@ export const useBookings = () => {
         }
         
         // Update state with the validated data
+        const sortedBookings = sortService.sortData(bookings, 'S no', 'asc');
         batchUpdate({
-          bookingsData: bookings,
-          filteredData: bookings,
+          bookingsData: sortedBookings,
+          filteredData: sortedBookings,
           selectedYear: year,
           currentPage: 1,
           error: metadata.isMockData ? {
@@ -152,14 +153,14 @@ export const useBookings = () => {
         });
         
         // Group the data by default categories (only if data changed)
-        if (bookings !== bookingsData) {
+        if (sortedBookings !== bookingsData) {
           await Promise.all([
-            groupData('locations', bookings),
-            groupData('months', bookings),
-            groupData('sports', bookings),
-            groupData('status', bookings),
-            groupData('source', bookings),
-            groupData('payment', bookings)
+            groupData('locations', sortedBookings),
+            groupData('months', sortedBookings),
+            groupData('sports', sortedBookings),
+            groupData('status', sortedBookings),
+            groupData('source', sortedBookings),
+            groupData('payment', sortedBookings)
           ]);
         }
       },
