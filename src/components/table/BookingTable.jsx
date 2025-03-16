@@ -94,51 +94,37 @@ function BookingTable({ data, onRowClick, className = '' }) {
    * @returns {string|React.ReactNode} Formatted value
    */
   const formatCellContent = useCallback((value, field) => {
-    try {
-      if (value === undefined || value === null) return '';
+    if (value === undefined || value === null) return '';
 
-      // Format based on field type
-      if (field.includes('Price') || field.includes('Revenue') || 
-          field.includes('Paid') || field.includes('Balance') || 
-          field.includes('Discount')) {
-        return formatUtils.currency(value);
-      } 
-      
-      if (field === 'Slot Date') {
-        const formattedDate = formatUtils.formatDateForDisplay(value, 'default');
-        const mediumFormat = formatUtils.formatDateForDisplay(value, 'medium');
-        return (
-          <Tooltip content={mediumFormat}>
-            <span>{formattedDate}</span>
-          </Tooltip>
-        );
+    return handleAsync(
+      () => {
+        // Format based on field type
+        switch (field) {
+          case 'date':
+            return formatUtils.formatDate(value);
+          case 'time':
+            return formatUtils.formatTime(value);
+          case 'amount':
+            return formatUtils.formatCurrency(value);
+          case 'status':
+            return (
+              <span className={`inline-flex items-center px-2 py-1 rounded-full text-sm ${getStatusColor(value)}`}>
+                {value}
+              </span>
+            );
+          default:
+            return String(value);
+        }
+      },
+      'BookingTable.formatCellContent',
+      {
+        severity: ErrorSeverity.WARNING,
+        category: ErrorCategory.UI,
+        metadata: { field, valueType: typeof value },
+        rethrow: false
       }
-      
-      if (field === 'Status') {
-        let statusClass = 'text-gray-500';
-        if (value === 'Confirmed') statusClass = 'text-success';
-        if (value === 'Pending') statusClass = 'text-yellow-600';
-        if (value === 'Cancelled') statusClass = 'text-error';
-        
-        return (
-          <span className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${statusClass}`}>
-            {value}
-          </span>
-        );
-      }
-      
-      return String(value);
-    } catch (error) {
-      handleError(
-        error,
-        'BookingTable.formatCellContent',
-        ErrorSeverity.WARNING,
-        ErrorCategory.UI,
-        { field, value: typeof value === 'object' ? 'object' : value }
-      );
-      return 'Error formatting value';
-    }
-  }, [handleError]);
+    ) || String(value); // Fallback to string if formatting fails
+  }, [handleAsync]);
 
   /**
    * Handle row click with error handling

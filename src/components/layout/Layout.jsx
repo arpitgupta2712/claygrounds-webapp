@@ -2,7 +2,7 @@ import { Outlet } from 'react-router-dom';
 import NavBar from './NavBar';
 import Footer from './Footer';
 import ScrollToTop from '../common/ScrollToTop';
-import { ErrorDisplay } from '../../hooks/useErrorTracker';
+import { ErrorDisplay } from '../../context/ErrorContext';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 

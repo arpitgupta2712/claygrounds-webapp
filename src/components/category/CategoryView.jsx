@@ -1,10 +1,11 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useBookings } from '../../hooks/useBookings';
-import { useErrorTracker } from '../../hooks/useErrorTracker';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { statsService } from '../../services/statsService';
 import { categoryConfigs } from '../../utils/constants';
 import { logger } from '../../utils/logger';
+import { ErrorSeverity, ErrorCategory } from '../../utils/errorTypes';
 import CategoryCard from './CategoryCard';
 import CategoryDetail from './CategoryDetail';
 import Loading from '../common/Loading';
@@ -20,7 +21,7 @@ const CategoryView = React.memo(function CategoryView({ type }) {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const { filteredData } = useApp();
   const { groupedData, groupData } = useBookings();
-  const { trackError } = useErrorTracker();
+  const { handleAsync, handleError } = useErrorHandler();
   
   // Add stats cache ref
   const statsCache = useRef(new Map());
@@ -51,59 +52,76 @@ const CategoryView = React.memo(function CategoryView({ type }) {
       return;
     }
 
-    try {
-      setIsLoading(true);
-      
-      // Ensure we have the required grouping
-      if (!groupedData[type]) {
-        await groupData(type);
-        return; // The useEffect will trigger again with new groupedData
-      }
+    setIsLoading(true);
 
-      // Calculate stats for each category item in parallel
-      const categoryStats = {};
-      const calculations = Object.entries(categoryGroupedData).map(async ([key, bookings]) => {
-        try {
-          // Check cache first
-          const cacheKey = `${key}:${bookings.length}:${type}`;
-          if (statsCache.current.has(cacheKey)) {
-            return [key, statsCache.current.get(cacheKey)];
+    try {
+      await handleAsync(
+        async () => {
+          // Ensure we have the required grouping
+          if (!groupedData[type]) {
+            await groupData(type);
+            return; // The useEffect will trigger again with new groupedData
           }
 
-          // Only log when actually calculating (not using cache)
-          logger.debug(`[CategoryView] Calculating stats for ${key}`);
-          const stats = await statsService.calculateCategoryStats(
-            bookings,
-            key,
-            config
-          );
-          
-          // Cache the result
-          statsCache.current.set(cacheKey, stats);
-          return [key, stats];
-        } catch (error) {
-          logger.error(`Error calculating stats for ${key}:`, error);
-          return [key, null];
-        }
-      });
+          // Calculate stats for each category item in parallel
+          const categoryStats = {};
+          const calculations = Object.entries(categoryGroupedData).map(async ([key, bookings]) => {
+            try {
+              // Check cache first
+              const cacheKey = `${key}:${bookings.length}:${type}`;
+              if (statsCache.current.has(cacheKey)) {
+                return [key, statsCache.current.get(cacheKey)];
+              }
 
-      // Wait for all calculations to complete
-      const results = await Promise.all(calculations);
-      
-      // Filter out failed calculations and update state
-      const validResults = results.filter(([_, result]) => result !== null);
-      const categoryStatsObj = Object.fromEntries(validResults);
-      
-      // Update last calculation reference and set stats
-      lastCalculationRef.current = { type, data: filteredData };
-      setStats(categoryStatsObj);
-    } catch (error) {
-      logger.error('[CategoryView] Error calculating stats:', error);
-      trackError(error, 'CategoryView.calculateStats', 'ERROR', 'DATA');
+              // Only log when actually calculating (not using cache)
+              logger.debug(`[CategoryView] Calculating stats for ${key}`);
+              const stats = await statsService.calculateCategoryStats(
+                bookings,
+                key,
+                config
+              );
+              
+              // Cache the result
+              statsCache.current.set(cacheKey, stats);
+              return [key, stats];
+            } catch (error) {
+              handleError(
+                error,
+                'CategoryView.calculateCategoryStats',
+                ErrorSeverity.ERROR,
+                ErrorCategory.DATA,
+                { category: key, bookingsCount: bookings.length }
+              );
+              return [key, null];
+            }
+          });
+
+          // Wait for all calculations to complete
+          const results = await Promise.all(calculations);
+          
+          // Filter out failed calculations and update state
+          const validResults = results.filter(([_, result]) => result !== null);
+          const categoryStatsObj = Object.fromEntries(validResults);
+          
+          // Update last calculation reference and set stats
+          lastCalculationRef.current = { type, data: filteredData };
+          setStats(categoryStatsObj);
+        },
+        'CategoryView.calculateStats',
+        {
+          severity: ErrorSeverity.ERROR,
+          category: ErrorCategory.DATA,
+          metadata: {
+            type,
+            dataLength: filteredData.length,
+            categoriesCount: Object.keys(categoryGroupedData).length
+          }
+        }
+      );
     } finally {
       setIsLoading(false);
     }
-  }, [filteredData, type, config, groupData, categoryGroupedData, trackError, shouldRecalculate]);
+  }, [filteredData, type, config, groupData, categoryGroupedData, handleAsync, handleError, shouldRecalculate]);
 
   // Calculate stats when data changes
   useEffect(() => {
@@ -133,7 +151,7 @@ const CategoryView = React.memo(function CategoryView({ type }) {
     setSelectedCategory(null);
   }, []);
 
-  // Memoize category cards rendering - MOVED BEFORE CONDITIONAL RETURNS
+  // Memoize category cards rendering
   const categoryCards = useMemo(() => {
     if (!stats || !config) return null;
 

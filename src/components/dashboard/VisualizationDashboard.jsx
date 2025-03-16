@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useBookings } from '../../hooks/useBookings';
-import { useErrorTracker } from '../../hooks/useErrorTracker';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { statsService } from '../../services/statsService';
+import { ErrorSeverity, ErrorCategory } from '../../utils/errorTypes';
 import { PaymentDistribution, StatusDistribution, SourceDistribution } from '../visualizations';
 import Loading from '../common/Loading';
 import EmptyState from '../common/EmptyState';
@@ -17,7 +18,7 @@ function VisualizationDashboard({ compact = false }) {
   const [isLoading, setIsLoading] = useState(false);
   const { filteredData } = useApp();
   const { groupedData, groupData } = useBookings();
-  const { trackError } = useErrorTracker();
+  const { handleAsync } = useErrorHandler();
 
   // Calculate statistics when data changes
   useEffect(() => {
@@ -28,28 +29,31 @@ function VisualizationDashboard({ compact = false }) {
     
     setIsLoading(true);
     
-    try {
-      console.log('[VisualizationDashboard] Calculating summary statistics');
-      
-      // Ensure we have all required groupings
-      groupData('payment');
-      groupData('status');
-      groupData('source');
-      
-      const calculatedStats = statsService.calculateSummaryStats(filteredData);
-      setStats(calculatedStats);
-    } catch (error) {
-      console.error('[VisualizationDashboard] Error calculating statistics:', error);
-      trackError(
-        error,
-        'VisualizationDashboard.calculateStats',
-        'ERROR',
-        'DATA'
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  }, [filteredData, groupData, trackError]);
+    handleAsync(
+      async () => {
+        console.log('[VisualizationDashboard] Calculating summary statistics');
+        
+        // Ensure we have all required groupings
+        await Promise.all([
+          groupData('payment'),
+          groupData('status'),
+          groupData('source')
+        ]);
+        
+        const calculatedStats = await statsService.calculateSummaryStats(filteredData);
+        setStats(calculatedStats);
+      },
+      'VisualizationDashboard.calculateStats',
+      {
+        severity: ErrorSeverity.ERROR,
+        category: ErrorCategory.DATA,
+        metadata: {
+          dataLength: filteredData.length,
+          hasGroupedData: !!groupedData
+        }
+      }
+    ).finally(() => setIsLoading(false));
+  }, [filteredData, groupData, handleAsync, groupedData]);
 
   if (isLoading) {
     return <Loading size="sm" message="Preparing visualizations..." className="my-6" />;

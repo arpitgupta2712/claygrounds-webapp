@@ -9,7 +9,6 @@ import Loading from '../common/Loading';
 import PropTypes from 'prop-types';
 import { withErrorBoundary } from '../common/ErrorBoundary';
 import React from 'react';
-import { useErrorTracker } from '../../hooks/useErrorTracker';
 
 // Fallback component for error states
 const StatsFallback = ({ error }) => (
@@ -243,67 +242,61 @@ const CustomSummaryStats = React.memo(function CustomSummaryStats({
   statsToShow,
   className = ''
 }) {
-  const { trackError } = useErrorTracker();
+  const { handleAsync, handleError } = useErrorHandler();
 
   // Memoize stats entries
   const statsEntries = useMemo(() => {
     if (!customStats) return [];
-    return statsToShow 
-      ? Object.entries(customStats).filter(([key]) => statsToShow.includes(key))
-      : Object.entries(customStats);
-  }, [customStats, statsToShow]);
 
-  // Memoize stats cards
-  const statsCards = useMemo(() => {
-    return statsEntries.map(([key, value]) => {
-      try {
-        // Skip functions and internal properties
-        if (typeof value === 'function' || key.startsWith('_')) {
-          return null;
+    try {
+      console.log('[CustomSummaryStats] Processing custom stats entries');
+      
+      // Filter stats based on statsToShow if provided
+      const entries = Object.entries(customStats);
+      const filteredEntries = statsToShow 
+        ? entries.filter(([key]) => statsToShow.includes(key))
+        : entries;
+      
+      return filteredEntries.map(([key, value]) => ({
+        key,
+        title: key.split(/(?=[A-Z])/).join(' '), // Convert camelCase to Title Case
+        value: typeof value === 'number' ? value : 0,
+        type: key.toLowerCase().includes('amount') || 
+              key.toLowerCase().includes('revenue') || 
+              key.toLowerCase().includes('collection')
+          ? 'currency'
+          : 'number'
+      }));
+    } catch (error) {
+      handleError(
+        error,
+        'CustomSummaryStats.processStats',
+        ErrorSeverity.ERROR,
+        ErrorCategory.DATA,
+        {
+          statsKeys: Object.keys(customStats),
+          statsToShow
         }
-        
-        // Format the title from camelCase to Title Case
-        const title = key
-          .replace(/([A-Z])/g, ' $1')
-          .replace(/^./, str => str.toUpperCase());
-        
-        // Determine type based on key name or value type
-        let type = 'text';
-        if (typeof value === 'number') {
-          if (key.includes('revenue') || key.includes('paid') || 
-              key.includes('balance') || key.includes('price')) {
-            type = 'currency';
-          } else if (key.includes('rate') || key.includes('percentage')) {
-            type = 'percentage';
-          } else {
-            type = 'number';
-          }
-        }
-        
-        return (
-          <StatsCard
-            key={key}
-            title={title}
-            value={value}
-            type={type}
-          />
-        );
-      } catch (error) {
-        trackError(
-          error,
-          'CustomSummaryStats.renderStat',
-          ErrorSeverity.WARNING,
-          ErrorCategory.UI,
-          { key, valueType: typeof value }
-        );
-        return null;
-      }
-    }).filter(Boolean);
-  }, [statsEntries, trackError]);
+      );
+      return [];
+    }
+  }, [customStats, statsToShow, handleError]);
+
+  // If no stats, don't render anything
+  if (!statsEntries.length) {
+    return null;
+  }
 
   return (
-    <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 ${className}`}>
-      {statsCards}
+    <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 ${className}`}>
+      {statsEntries.map(({ key, title, value, type }) => (
+        <StatsCard
+          key={key}
+          title={title}
+          value={value}
+          type={type}
+        />
+      ))}
     </div>
   );
 });

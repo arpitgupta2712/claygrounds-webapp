@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useBookings } from '../../hooks/useBookings';
-import { useErrorTracker } from '../../hooks/useErrorTracker';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
+import { ErrorSeverity, ErrorCategory } from '../../utils/errorTypes';
 import { statsService } from '../../services/statsService';
 import { formatUtils } from '../../utils/formatUtils';
 import Loading from '../common/Loading';
@@ -19,7 +20,7 @@ function GlobalReport() {
   const [activeView, setActiveView] = useState('summary'); // summary, monthly, location
   const { filteredData } = useApp();
   const { groupedData, groupData } = useBookings();
-  const { trackError } = useErrorTracker();
+  const { handleAsync } = useErrorHandler();
 
   useEffect(() => {
     if (!filteredData || filteredData.length === 0) {
@@ -28,42 +29,46 @@ function GlobalReport() {
     }
 
     setIsLoading(true);
-    try {
-      console.log('[GlobalReport] Generating report data');
-      
-      // Ensure we have all required groupings
-      groupData('month');
-      groupData('location');
-      groupData('status');
-      groupData('payment');
-      groupData('source');
-      
-      // Calculate summary statistics
-      const summaryStats = statsService.calculateSummaryStats(filteredData);
-      
-      // Calculate monthly payment statistics
-      const monthlyPayments = statsService.calculateMonthlyPayments(filteredData);
-      
-      // Get location distribution
-      const locationStats = summaryStats.locationStats;
-      
-      setReportData({
-        summary: summaryStats,
-        monthly: monthlyPayments,
-        locations: locationStats
-      });
-    } catch (error) {
-      console.error('[GlobalReport] Error generating report:', error);
-      trackError(
-        error,
-        'GlobalReport.generateReport',
-        'ERROR',
-        'DATA'
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  }, [filteredData, groupData, trackError]);
+    
+    handleAsync(
+      async () => {
+        console.log('[GlobalReport] Generating report data');
+        
+        // Ensure we have all required groupings
+        await Promise.all([
+          groupData('month'),
+          groupData('location'),
+          groupData('status'),
+          groupData('payment'),
+          groupData('source')
+        ]);
+        
+        // Calculate summary statistics
+        const summaryStats = await statsService.calculateSummaryStats(filteredData);
+        
+        // Calculate monthly payment statistics
+        const monthlyPayments = await statsService.calculateMonthlyPayments(filteredData);
+        
+        // Get location distribution
+        const locationStats = summaryStats.locationStats;
+        
+        setReportData({
+          summary: summaryStats,
+          monthly: monthlyPayments,
+          location: locationStats
+        });
+      },
+      'GlobalReport.generateReport',
+      {
+        severity: ErrorSeverity.ERROR,
+        category: ErrorCategory.DATA,
+        metadata: {
+          dataLength: filteredData.length,
+          activeView
+        }
+      }
+    ).finally(() => setIsLoading(false));
+  }, [filteredData, groupData, handleAsync, activeView]);
 
   if (isLoading) {
     return <Loading size="sm" message="Generating report..." className="my-6" />;
@@ -236,7 +241,7 @@ function GlobalReport() {
           <div className="bg-white p-6 rounded-lg shadow">
             <h3 className="text-lg font-semibold mb-4">Location Revenue Distribution</h3>
             <ReportChart
-              data={reportData.locations.map(loc => ({
+              data={reportData.location.map(loc => ({
                 label: loc.locationId,
                 value: loc.revenue,
                 details: {
@@ -253,7 +258,7 @@ function GlobalReport() {
           <div className="bg-white p-6 rounded-lg shadow">
             <h3 className="text-lg font-semibold mb-4">Location Details</h3>
             <ReportTable
-              data={reportData.locations}
+              data={reportData.location}
               columns={[
                 { key: 'locationId', label: 'Location' },
                 { key: 'bookings', label: 'Total Bookings', format: 'number' },

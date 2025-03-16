@@ -1,7 +1,7 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 import { ErrorSeverity, ErrorCategory } from '../../utils/errorTypes';
-import { useErrorTracker } from '../../hooks/useErrorTracker';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
 
 /**
  * Error Boundary component to catch and handle React rendering errors
@@ -62,15 +62,19 @@ ErrorBoundary.propTypes = {
  */
 function withErrorBoundary(WrappedComponent, options = {}) {
   const WithErrorBoundary = (props) => {
-    const { trackError } = useErrorTracker();
+    const { handleError } = useErrorHandler();
     
-    const handleError = (error, errorInfo) => {
-      trackError(
+    const handleBoundaryError = (error, errorInfo) => {
+      handleError(
         error,
         options.context || WrappedComponent.name,
         ErrorSeverity.ERROR,
         ErrorCategory.UI,
-        { ...errorInfo, ...options.metadata }
+        { 
+          componentStack: errorInfo.componentStack,
+          ...options.metadata,
+          ...errorInfo
+        }
       );
       options.onError?.(error, errorInfo);
     };
@@ -78,7 +82,7 @@ function withErrorBoundary(WrappedComponent, options = {}) {
     return (
       <ErrorBoundary
         fallback={options.fallback}
-        onError={handleError}
+        onError={handleBoundaryError}
         metadata={options.metadata}
       >
         <WrappedComponent {...props} />

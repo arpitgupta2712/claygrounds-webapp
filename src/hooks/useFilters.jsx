@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { useBookings } from './useBookings';
-import { useErrorTracker } from './useErrorTracker';
+import { useErrorHandler } from './useErrorHandler';
 import { dataUtils } from '../utils/dataUtils';
 import { FilterTypes, FilterConfig } from '../utils/constants';
 import { ErrorSeverity, ErrorCategory } from '../utils/errorTypes';
@@ -21,7 +21,7 @@ export const useFilters = () => {
 
   const { bookingsData, activeFilters } = useApp();
   const { applyFilter, clearFilters } = useBookings();
-  const { trackError } = useErrorTracker();
+  const { handleAsync, handleError } = useErrorHandler();
 
   /**
    * Memoized locations from data for dropdown
@@ -30,22 +30,25 @@ export const useFilters = () => {
   const locations = useMemo(() => {
     if (!bookingsData || !bookingsData.length) return [];
     
-    try {
-      // Use dataUtils to get unique values
-      const uniqueLocations = dataUtils.getUniqueValues(bookingsData, 'Location');
-      console.log(`[useFilters] Found ${uniqueLocations.length} unique locations`);
-      return uniqueLocations;
-    } catch (error) {
-      console.error('[useFilters] Error getting locations:', error);
-      trackError(
-        error,
-        'useFilters.locations',
-        ErrorSeverity.ERROR,
-        ErrorCategory.DATA
-      );
-      return [];
-    }
-  }, [bookingsData, trackError]);
+    return handleAsync(
+      async () => {
+        // Use dataUtils to get unique values
+        const uniqueLocations = dataUtils.getUniqueValues(bookingsData, 'Location');
+        console.log(`[useFilters] Found ${uniqueLocations.length} unique locations`);
+        return uniqueLocations;
+      },
+      'useFilters.locations',
+      {
+        severity: ErrorSeverity.ERROR,
+        category: ErrorCategory.DATA,
+        metadata: {
+          dataLength: bookingsData?.length,
+          hasData: !!bookingsData
+        },
+        onError: () => []
+      }
+    ) || [];
+  }, [bookingsData, handleAsync]);
 
   /**
    * Get locations from memoized data for dropdown
@@ -58,122 +61,155 @@ export const useFilters = () => {
    * @param {string} type - New filter type
    */
   const handleFilterTypeChange = useCallback((type) => {
-    console.log(`[useFilters] Changing filter type to: ${type}`);
-    setFilterType(type);
-    
-    // Reset all filter values when changing type
-    setSingleDate('');
-    setStartDate('');
-    setEndDate('');
-    setLocationValue('');
-    setTextValue('');
-    setBalanceChecked(false);
-  }, []);
+    handleAsync(
+      async () => {
+        console.log(`[useFilters] Changing filter type to: ${type}`);
+        setFilterType(type);
+        
+        // Reset all filter values when changing type
+        setSingleDate('');
+        setStartDate('');
+        setEndDate('');
+        setLocationValue('');
+        setTextValue('');
+        setBalanceChecked(false);
+      },
+      'useFilters.handleFilterTypeChange',
+      {
+        severity: ErrorSeverity.ERROR,
+        category: ErrorCategory.UI,
+        metadata: {
+          newType: type,
+          previousType: filterType
+        }
+      }
+    );
+  }, [handleAsync, filterType]);
 
   /**
    * Apply filter based on current values
    */
   const handleApplyFilter = useCallback(() => {
-    try {
-      if (!filterType) {
-        console.warn('[useFilters] No filter type selected');
-        return;
+    handleAsync(
+      async () => {
+        if (!filterType) {
+          console.warn('[useFilters] No filter type selected');
+          return;
+        }
+
+        console.log(`[useFilters] Applying filter type: ${filterType}`);
+
+        switch (filterType) {
+          case FilterTypes.SINGLE_DATE:
+            if (!singleDate) {
+              console.warn('[useFilters] No date selected');
+              return;
+            }
+            applyFilter(filterType, singleDate);
+            break;
+
+          case FilterTypes.DATE_RANGE:
+            if (!startDate && !endDate) {
+              console.warn('[useFilters] No date range selected');
+              return;
+            }
+            applyFilter(filterType, { startDate, endDate });
+            break;
+
+          case FilterTypes.LOCATION:
+            if (!locationValue) {
+              console.warn('[useFilters] No location selected');
+              return;
+            }
+            // Debug: Log the exact location value being used
+            console.log('[useFilters] Applying location filter with value:', locationValue);
+            // Debug: Log a sample of bookings with this location
+            const sampleBookings = bookingsData
+              .filter(b => b.Location === locationValue)
+              .slice(0, 3);
+            console.log('[useFilters] Sample bookings with this location:', sampleBookings);
+            applyFilter(filterType, locationValue);
+            break;
+
+          case FilterTypes.CUSTOMER:
+          case FilterTypes.BOOKING_REF:
+          case FilterTypes.PHONE:
+            if (!textValue || textValue.length < 2) {
+              console.warn('[useFilters] Text value too short');
+              return;
+            }
+            applyFilter(filterType, textValue);
+            break;
+
+          case FilterTypes.BALANCE:
+            applyFilter(filterType, balanceChecked);
+            break;
+
+          default:
+            console.warn(`[useFilters] Unknown filter type: ${filterType}`);
+        }
+      },
+      'useFilters.handleApplyFilter',
+      {
+        severity: ErrorSeverity.ERROR,
+        category: ErrorCategory.UI,
+        metadata: {
+          filterType,
+          hasValue: {
+            singleDate: !!singleDate,
+            dateRange: !!(startDate || endDate),
+            location: !!locationValue,
+            text: !!textValue,
+            balance: balanceChecked
+          },
+          dataLength: bookingsData?.length
+        }
       }
-
-      console.log(`[useFilters] Applying filter type: ${filterType}`);
-
-      switch (filterType) {
-        case FilterTypes.SINGLE_DATE:
-          if (!singleDate) {
-            console.warn('[useFilters] No date selected');
-            return;
-          }
-          applyFilter(filterType, singleDate);
-          break;
-
-        case FilterTypes.DATE_RANGE:
-          if (!startDate && !endDate) {
-            console.warn('[useFilters] No date range selected');
-            return;
-          }
-          applyFilter(filterType, { startDate, endDate });
-          break;
-
-        case FilterTypes.LOCATION:
-          if (!locationValue) {
-            console.warn('[useFilters] No location selected');
-            return;
-          }
-          // Debug: Log the exact location value being used
-          console.log('[useFilters] Applying location filter with value:', locationValue);
-          // Debug: Log a sample of bookings with this location
-          const sampleBookings = bookingsData
-            .filter(b => b.Location === locationValue)
-            .slice(0, 3);
-          console.log('[useFilters] Sample bookings with this location:', sampleBookings);
-          applyFilter(filterType, locationValue);
-          break;
-
-        case FilterTypes.CUSTOMER:
-        case FilterTypes.BOOKING_REF:
-        case FilterTypes.PHONE:
-          if (!textValue || textValue.length < 2) {
-            console.warn('[useFilters] Text value too short');
-            return;
-          }
-          applyFilter(filterType, textValue);
-          break;
-
-        case FilterTypes.BALANCE:
-          applyFilter(filterType, balanceChecked);
-          break;
-
-        default:
-          console.warn(`[useFilters] Unknown filter type: ${filterType}`);
-      }
-    } catch (error) {
-      console.error('[useFilters] Error applying filter:', error);
-      trackError(
-        error,
-        'useFilters.handleApplyFilter',
-        ErrorSeverity.ERROR,
-        ErrorCategory.UI
-      );
-    }
+    );
   }, [
     filterType, singleDate, startDate, endDate,
     locationValue, textValue, balanceChecked,
-    applyFilter, trackError, bookingsData
+    applyFilter, handleAsync, bookingsData
   ]);
 
   /**
    * Reset all filters
    */
   const handleResetFilter = useCallback(() => {
-    try {
-      console.log('[useFilters] Resetting filters');
-      
-      // Reset UI state
-      setFilterType('');
-      setSingleDate('');
-      setStartDate('');
-      setEndDate('');
-      setLocationValue('');
-      setTextValue('');
-      setBalanceChecked(false);
-      
-      // Clear filters from data
-      clearFilters();
-    } catch (error) {
-      console.error('[useFilters] Error resetting filters:', error);
-      trackError(
-        error,
-        'useFilters.handleResetFilter',
-        ErrorSeverity.ERROR,
-        ErrorCategory.UI
-      );
-    }
-  }, [clearFilters, trackError]);
+    handleAsync(
+      async () => {
+        console.log('[useFilters] Resetting filters');
+        
+        // Reset UI state
+        setFilterType('');
+        setSingleDate('');
+        setStartDate('');
+        setEndDate('');
+        setLocationValue('');
+        setTextValue('');
+        setBalanceChecked(false);
+        
+        // Clear filters from data
+        clearFilters();
+      },
+      'useFilters.handleResetFilter',
+      {
+        severity: ErrorSeverity.ERROR,
+        category: ErrorCategory.UI,
+        metadata: {
+          hadFilters: !!filterType,
+          previousType: filterType,
+          hadValues: {
+            singleDate: !!singleDate,
+            dateRange: !!(startDate || endDate),
+            location: !!locationValue,
+            text: !!textValue,
+            balance: balanceChecked
+          }
+        }
+      }
+    );
+  }, [clearFilters, handleAsync, filterType, singleDate, startDate, endDate, locationValue, textValue, balanceChecked]);
 
   /**
    * Check if a specific input should be visible
@@ -218,45 +254,49 @@ export const useFilters = () => {
   const initFromActiveFilters = useCallback(() => {
     if (!activeFilters?.type) return;
     
-    try {
-      console.log('[useFilters] Initializing from active filters', activeFilters);
-      
-      setFilterType(activeFilters.type);
-      
-      switch (activeFilters.type) {
-        case FilterTypes.SINGLE_DATE:
-          setSingleDate(activeFilters.value);
-          break;
-          
-        case FilterTypes.DATE_RANGE:
-          setStartDate(activeFilters.value.startDate || '');
-          setEndDate(activeFilters.value.endDate || '');
-          break;
-          
-        case FilterTypes.LOCATION:
-          setLocationValue(activeFilters.value);
-          break;
-          
-        case FilterTypes.CUSTOMER:
-        case FilterTypes.BOOKING_REF:
-        case FilterTypes.PHONE:
-          setTextValue(activeFilters.value);
-          break;
-          
-        case FilterTypes.BALANCE:
-          setBalanceChecked(activeFilters.value);
-          break;
+    handleAsync(
+      async () => {
+        console.log('[useFilters] Initializing from active filters', activeFilters);
+        
+        setFilterType(activeFilters.type);
+        
+        switch (activeFilters.type) {
+          case FilterTypes.SINGLE_DATE:
+            setSingleDate(activeFilters.value);
+            break;
+            
+          case FilterTypes.DATE_RANGE:
+            setStartDate(activeFilters.value.startDate || '');
+            setEndDate(activeFilters.value.endDate || '');
+            break;
+            
+          case FilterTypes.LOCATION:
+            setLocationValue(activeFilters.value);
+            break;
+            
+          case FilterTypes.CUSTOMER:
+          case FilterTypes.BOOKING_REF:
+          case FilterTypes.PHONE:
+            setTextValue(activeFilters.value);
+            break;
+            
+          case FilterTypes.BALANCE:
+            setBalanceChecked(activeFilters.value);
+            break;
+        }
+      },
+      'useFilters.initFromActiveFilters',
+      {
+        severity: ErrorSeverity.ERROR,
+        category: ErrorCategory.UI,
+        metadata: {
+          filterType: activeFilters.type,
+          hasValue: !!activeFilters.value,
+          valueType: typeof activeFilters.value
+        }
       }
-    } catch (error) {
-      console.error('[useFilters] Error initializing from active filters:', error);
-      trackError(
-        error,
-        'useFilters.initFromActiveFilters',
-        ErrorSeverity.ERROR,
-        ErrorCategory.UI
-      );
-    }
-  }, [activeFilters, trackError]);
+    );
+  }, [activeFilters, handleAsync]);
 
   return {
     // State
@@ -269,7 +309,6 @@ export const useFilters = () => {
     balanceChecked,
     
     // Setters
-    setFilterType: handleFilterTypeChange,
     setSingleDate,
     setStartDate,
     setEndDate,
@@ -277,18 +316,15 @@ export const useFilters = () => {
     setTextValue,
     setBalanceChecked,
     
-    // Helper methods
+    // Actions
+    handleFilterTypeChange,
+    handleApplyFilter,
+    handleResetFilter,
+    
+    // Helpers
+    getLocations,
     isInputVisible,
     getTextPlaceholder,
-    getLocations,
-    
-    // Actions
-    applyFilter: handleApplyFilter,
-    resetFilter: handleResetFilter,
-    initFromActiveFilters,
-    
-    // Filter configurations
-    filterConfig: FilterConfig,
-    filterTypes: FilterTypes
+    initFromActiveFilters
   };
-}
+};

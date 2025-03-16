@@ -3,7 +3,7 @@ import PropTypes from 'prop-types';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useApp } from '../../context/AppContext';
-import { useErrorTracker } from '../../hooks/useErrorTracker';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity, ErrorCategory } from '../../utils/errorTypes';
 import { dataUtils } from '../../utils/dataUtils';
 import { statsService } from '../../services/statsService';
@@ -136,10 +136,17 @@ function generatePDF(stats, locationName, year) {
   doc.line(0, 35, pageWidth, 35);
   
   // Add logo
+  const { handleError } = useErrorHandler();
   try {
     doc.addImage(ASSETS.LOGO, 'PNG', 20, 10, 20, 20, undefined, 'FAST');
   } catch (error) {
-    console.warn('[LocationReport] Failed to add logo:', error);
+    handleError(
+      error,
+      'LocationReport.generateReport',
+      ErrorSeverity.WARNING,
+      ErrorCategory.UI,
+      { assetType: 'logo' }
+    );
     // Fallback to circle if image fails
     doc.setFillColor(theme.primary.default[0], theme.primary.default[1], theme.primary.default[2]);
     doc.circle(30, 20, 10, 'F');
@@ -381,7 +388,7 @@ function LocationReport({ locationId, locationName }) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const { selectedYear } = useApp();
-  const { trackError } = useErrorTracker();
+  const { handleAsync, handleError } = useErrorHandler();
 
   // Load location-specific stats
   useEffect(() => {
@@ -393,39 +400,40 @@ function LocationReport({ locationId, locationName }) {
       setIsLoading(true);
       setError(null);
       
-      try {
-        console.debug(`[LocationReport] Loading statistics for location: ${locationId} (${locationName})`);
-        const stats = await statsService.getLocationStats(locationId);
-        
-        // Only update state if component is still mounted
-        if (!mounted) return;
-        
-        if (!stats) {
-          console.warn(`[LocationReport] No statistics found for location: ${locationName}`);
-          setError(`No statistics available for ${locationName}. This could be because there are no bookings for this location or there was an error loading the data.`);
-          setLocationStats(null);
-          return;
+      await handleAsync(
+        async () => {
+          console.debug(`[LocationReport] Loading statistics for location: ${locationId} (${locationName})`);
+          const stats = await statsService.getLocationStats(locationId);
+          
+          // Only update state if component is still mounted
+          if (!mounted) return;
+          
+          if (!stats) {
+            console.warn(`[LocationReport] No statistics found for location: ${locationName}`);
+            setError(`No statistics available for ${locationName}. This could be because there are no bookings for this location or there was an error loading the data.`);
+            setLocationStats(null);
+            return;
+          }
+          
+          setLocationStats(stats);
+        },
+        'LocationReport.loadStats',
+        {
+          severity: ErrorSeverity.ERROR,
+          category: ErrorCategory.DATA,
+          metadata: { locationId, locationName },
+          onError: (err) => {
+            if (mounted) {
+              console.error('[LocationReport] Error loading location stats:', err);
+              setError(`Failed to load location statistics: ${err.message}`);
+            }
+          }
         }
-        
-        setLocationStats(stats);
-      } catch (err) {
-        // Only update state if component is still mounted
-        if (!mounted) return;
-        
-        console.error('[LocationReport] Error loading location stats:', err);
-        setError(`Failed to load location statistics: ${err.message}`);
-        trackError(
-          err,
-          'LocationReport.loadStats',
-          ErrorSeverity.ERROR,
-          ErrorCategory.DATA,
-          { locationId, locationName }
-        );
-      } finally {
+      ).finally(() => {
         if (mounted) {
           setIsLoading(false);
         }
-      }
+      });
     }
     
     loadLocationStats();
@@ -434,20 +442,51 @@ function LocationReport({ locationId, locationName }) {
     return () => {
       mounted = false;
     };
-  }, [locationId, locationName, trackError]);
+  }, [locationId, locationName, handleAsync]);
 
   // Handle export to PDF
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     if (!locationStats) return;
-    generatePDF(locationStats, locationName, selectedYear);
+    
+    await handleAsync(
+      async () => {
+        generatePDF(locationStats, locationName, selectedYear);
+      },
+      'LocationReport.exportPDF',
+      {
+        severity: ErrorSeverity.ERROR,
+        category: ErrorCategory.UI,
+        metadata: {
+          locationName,
+          year: selectedYear,
+          hasStats: !!locationStats,
+          statsKeys: Object.keys(locationStats || {})
+        }
+      }
+    );
   };
 
   // Handle export to text report
-  const handleExportText = () => {
+  const handleExportText = async () => {
     if (!locationStats) return;
-    const report = generateReport(locationStats, locationName, selectedYear);
-    // Implementation for saving or displaying text report
-    console.log(report);
+    
+    await handleAsync(
+      async () => {
+        const report = generateReport(locationStats, locationName, selectedYear);
+        console.log(report);
+      },
+      'LocationReport.exportText',
+      {
+        severity: ErrorSeverity.ERROR,
+        category: ErrorCategory.UI,
+        metadata: {
+          locationName,
+          year: selectedYear,
+          hasStats: !!locationStats,
+          statsKeys: Object.keys(locationStats || {})
+        }
+      }
+    );
   };
 
   if (isLoading) {

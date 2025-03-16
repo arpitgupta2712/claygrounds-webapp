@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { useErrorTracker } from '../../hooks/useErrorTracker';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity, ErrorCategory } from '../../utils/errorTypes';
 import Loading from '../common/Loading';
 
@@ -12,7 +12,7 @@ function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const { user, session, signInWithGoogle, devSignIn, isDevelopment } = useAuth();
-  const { trackError } = useErrorTracker();
+  const { handleAsync, handleError } = useErrorHandler();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -29,27 +29,24 @@ function LoginPage() {
    * Handle Google sign in
    */
   const handleGoogleSignIn = async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      
-      console.log('[LoginPage] Starting Google sign-in process');
-      await signInWithGoogle();
-      
-      // Navigation handled by useEffect above
-    } catch (error) {
-      console.error('[LoginPage] Google sign-in error:', error);
-      setError('Error signing in with Google. Please try again.');
-      
-      trackError(
-        error,
-        'LoginPage.handleGoogleSignIn',
-        ErrorSeverity.ERROR,
-        ErrorCategory.AUTH
-      );
-    } finally {
-      setIsLoading(false);
-    }
+    setIsLoading(true);
+    setError(null);
+
+    await handleAsync(
+      async () => {
+        console.log('[LoginPage] Starting Google sign-in process');
+        await signInWithGoogle();
+        // Navigation handled by useEffect above
+      },
+      'LoginPage.handleGoogleSignIn',
+      {
+        severity: ErrorSeverity.ERROR,
+        category: ErrorCategory.AUTH,
+        onError: (error) => {
+          setError('Error signing in with Google. Please try again.');
+        }
+      }
+    ).finally(() => setIsLoading(false));
   };
 
   /**
@@ -61,30 +58,29 @@ function LoginPage() {
       return;
     }
     
-    try {
-      setIsLoading(true);
-      setError(null);
-      
-      console.log('[LoginPage] Starting development mode login');
-      const result = await devSignIn();
-      
-      if (result?.user) {
-        const from = location.state?.from?.pathname || '/dashboard';
-        navigate(from, { replace: true });
+    setIsLoading(true);
+    setError(null);
+
+    await handleAsync(
+      async () => {
+        console.log('[LoginPage] Starting development mode login');
+        const result = await devSignIn();
+        
+        if (result?.user) {
+          const from = location.state?.from?.pathname || '/dashboard';
+          navigate(from, { replace: true });
+        }
+      },
+      'LoginPage.handleDevLogin',
+      {
+        severity: ErrorSeverity.ERROR,
+        category: ErrorCategory.AUTH,
+        metadata: { isDevelopment },
+        onError: (error) => {
+          setError('Error with development login. Please try again.');
+        }
       }
-    } catch (error) {
-      console.error('[LoginPage] Development login error:', error);
-      setError('Error with development login. Please try again.');
-      
-      trackError(
-        error,
-        'LoginPage.handleDevLogin',
-        ErrorSeverity.ERROR,
-        ErrorCategory.AUTH
-      );
-    } finally {
-      setIsLoading(false);
-    }
+    ).finally(() => setIsLoading(false));
   };
 
   // Show loading state while checking authentication

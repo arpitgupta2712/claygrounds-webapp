@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import { FixedSizeGrid as Grid } from 'react-window';
 import { useApp } from '../../context/AppContext';
-import { useErrorTracker } from '../../hooks/useErrorTracker';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { categoryConfigs } from '../../utils/constants';
 import { dataUtils } from '../../utils/dataUtils';
 import { ErrorSeverity, ErrorCategory } from '../../utils/errorTypes';
@@ -31,7 +31,7 @@ const CategoryList = React.memo(function CategoryList({ type, onCategorySelect }
   const [gridDimensions, setGridDimensions] = useState({ width: 0, height: 0 });
   
   const { filteredData, setCategoryType } = useApp();
-  const { trackError } = useErrorTracker();
+  const { handleAsync } = useErrorHandler();
   
   // Get category configuration based on type
   const config = useMemo(() => categoryConfigs[type], [type]);
@@ -40,17 +40,31 @@ const CategoryList = React.memo(function CategoryList({ type, onCategorySelect }
   const loadCategories = useCallback(async () => {
     if (!filteredData || !config) return;
     
-    try {
-      setIsLoading(true);
-      const categorizedData = await dataUtils.categorizeData(filteredData, type);
-      setCategories(categorizedData);
-    } catch (error) {
-      setError(error);
-      trackError(error, 'CategoryList.loadCategories', ErrorSeverity.ERROR, ErrorCategory.DATA);
-    } finally {
-      setIsLoading(false);
+    setIsLoading(true);
+    const result = await handleAsync(
+      async () => {
+        const categorizedData = await dataUtils.categorizeData(filteredData, type);
+        return categorizedData;
+      },
+      'CategoryList.loadCategories',
+      {
+        severity: ErrorSeverity.ERROR,
+        category: ErrorCategory.DATA,
+        metadata: {
+          type,
+          dataLength: filteredData.length
+        }
+      }
+    );
+
+    if (result.error) {
+      setError(result.error);
+    } else {
+      setCategories(result);
+      setError(null);
     }
-  }, [filteredData, type, config, trackError]);
+    setIsLoading(false);
+  }, [filteredData, type, config, handleAsync]);
 
   // Load categories when filteredData or type changes
   useEffect(() => {

@@ -4,7 +4,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useApp } from '../../context/AppContext';
 import { useBookings } from '../../hooks/useBookings';
-import { useErrorTracker } from '../../hooks/useErrorTracker';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity, ErrorCategory } from '../../utils/errorTypes';
 import { dataUtils } from '../../utils/dataUtils';
 import { statsService } from '../../services/statsService';
@@ -236,10 +236,17 @@ function generatePDF(stats, facilityName, year) {
   doc.line(0, 35, pageWidth, 35);
   
   // Add logo
+  const { handleError } = useErrorHandler();
   try {
     doc.addImage(ASSETS.LOGO, 'PNG', 20, 10, 20, 20, undefined, 'FAST');
   } catch (error) {
-    console.warn('[FacilityReport] Failed to add logo:', error);
+    handleError(
+      error,
+      'FacilityReport.generatePDF',
+      ErrorSeverity.WARNING,
+      ErrorCategory.UI,
+      { assetType: 'logo' }
+    );
     // Fallback to circle if image fails
     doc.setFillColor(theme.primary.default[0], theme.primary.default[1], theme.primary.default[2]);
     doc.circle(30, 20, 10, 'F');
@@ -673,7 +680,7 @@ function generatePDF(stats, facilityName, year) {
  */
 function LocationReport({ locationId, locationName }) {
   const { selectedYear, bookingsData, isLoading } = useApp();
-  const { trackError } = useErrorTracker();
+  const { handleError, handleAsync } = useErrorHandler();
   const [locationData, setLocationData] = useState([]);
   const [locationStats, setLocationStats] = useState(null);
   const [showExportDropdown, setShowExportDropdown] = useState(false);
@@ -682,100 +689,107 @@ function LocationReport({ locationId, locationName }) {
   useEffect(() => {
     if (!bookingsData || !locationId) return;
 
-    try {
-      console.log(`[LocationReport] Filtering data for location: ${locationName} (${locationId})`);
-      
-      // Filter bookings for this location
-      const filteredData = bookingsData.filter(booking => 
-        booking.Location === locationName
-      );
-      
-      setLocationData(filteredData);
-      console.log(`[LocationReport] Filtered ${filteredData.length} bookings for location`);
-    } catch (error) {
-      console.error('[LocationReport] Error filtering location data:', error);
-      trackError(
-        error,
-        'LocationReport.filterLocationData',
-        ErrorSeverity.ERROR,
-        ErrorCategory.DATA
-      );
-    }
-  }, [bookingsData, locationId, locationName, trackError]);
+    handleAsync(
+      async () => {
+        console.log(`[LocationReport] Filtering data for location: ${locationName} (${locationId})`);
+        
+        // Filter bookings for this location
+        const filteredData = bookingsData.filter(booking => 
+          booking.Location === locationName
+        );
+        
+        setLocationData(filteredData);
+        console.log(`[LocationReport] Filtered ${filteredData.length} bookings for location`);
+      },
+      {
+        severity: ErrorSeverity.ERROR,
+        category: ErrorCategory.DATA,
+        metadata: {
+          operation: 'filterLocationData',
+          locationId,
+          locationName,
+          bookingsCount: bookingsData?.length
+        }
+      }
+    );
+  }, [bookingsData, locationId, locationName, handleAsync]);
 
   // Calculate statistics for the location
   useEffect(() => {
     if (!locationData.length) return;
 
-    try {
-      console.log(`[LocationReport] Calculating statistics for ${locationName}`);
-      
-      // Calculate basic statistics
-      const stats = {
-        totalBookings: locationData.length,
-        totalCollection: dataUtils.sum(locationData, 'Total Paid'),
-        totalOutstanding: dataUtils.sum(locationData, 'Balance'),
-        totalSlots: dataUtils.sum(locationData, 'Number of slots'),
-        uniqueCustomers: new Set(locationData.map(b => b.Phone)).size,
-        avgBookingValue: 0,
-        avgSlotsPerBooking: 0,
-        completionRate: 0,
-        onlineBookings: 0,
-        onlineBookingPercentage: 0,
+    handleAsync(
+      async () => {
+        console.log(`[LocationReport] Calculating statistics for ${locationName}`);
         
-        // Payment Methods
-        cashAmount: dataUtils.sum(locationData, 'Cash'),
-        bankAmount: dataUtils.sum(locationData, 'UPI') + dataUtils.sum(locationData, 'Bank Transfer'),
-        hudleAmount: dataUtils.sum(locationData, 'Hudle App') + 
-                    dataUtils.sum(locationData, 'Hudle QR') + 
-                    dataUtils.sum(locationData, 'Hudle Discount') + 
-                    dataUtils.sum(locationData, 'Hudle Pass') + 
-                    dataUtils.sum(locationData, 'Venue Wallet') + 
-                    dataUtils.sum(locationData, 'Hudle Wallet')
-      };
+        // Calculate basic statistics
+        const stats = {
+          totalBookings: locationData.length,
+          totalCollection: dataUtils.sum(locationData, 'Total Paid'),
+          totalOutstanding: dataUtils.sum(locationData, 'Balance'),
+          totalSlots: dataUtils.sum(locationData, 'Number of slots'),
+          uniqueCustomers: new Set(locationData.map(b => b.Phone)).size,
+          avgBookingValue: 0,
+          avgSlotsPerBooking: 0,
+          completionRate: 0,
+          onlineBookings: 0,
+          onlineBookingPercentage: 0,
+          
+          // Payment Methods
+          cashAmount: dataUtils.sum(locationData, 'Cash'),
+          bankAmount: dataUtils.sum(locationData, 'UPI') + dataUtils.sum(locationData, 'Bank Transfer'),
+          hudleAmount: dataUtils.sum(locationData, 'Hudle App') + 
+                      dataUtils.sum(locationData, 'Hudle QR') + 
+                      dataUtils.sum(locationData, 'Hudle Discount') + 
+                      dataUtils.sum(locationData, 'Hudle Pass') + 
+                      dataUtils.sum(locationData, 'Venue Wallet') + 
+                      dataUtils.sum(locationData, 'Hudle Wallet')
+        };
 
-      // Calculate payment percentages
-      const totalPayments = stats.cashAmount + stats.bankAmount + stats.hudleAmount;
-      if (totalPayments > 0) {
-        stats.cashPercentage = (stats.cashAmount / totalPayments) * 100;
-        stats.bankPercentage = (stats.bankAmount / totalPayments) * 100;
-        stats.hudlePercentage = (stats.hudleAmount / totalPayments) * 100;
+        // Calculate payment percentages
+        const totalPayments = stats.cashAmount + stats.bankAmount + stats.hudleAmount;
+        if (totalPayments > 0) {
+          stats.cashPercentage = (stats.cashAmount / totalPayments) * 100;
+          stats.bankPercentage = (stats.bankAmount / totalPayments) * 100;
+          stats.hudlePercentage = (stats.hudleAmount / totalPayments) * 100;
+        }
+
+        // Calculate averages
+        stats.avgBookingValue = Math.round(stats.totalCollection / stats.totalBookings / 100) * 100;
+        stats.avgSlotsPerBooking = Math.round(stats.totalSlots / stats.totalBookings);
+
+        // Calculate completion rate
+        const completedBookings = locationData.filter(b => b.Status === 'Confirmed').length;
+        stats.completionRate = (completedBookings / stats.totalBookings) * 100;
+
+        // Calculate online bookings
+        stats.onlineBookings = locationData.filter(b => b.Source === 'Online').length;
+        stats.onlineBookingPercentage = (stats.onlineBookings / stats.totalBookings) * 100;
+
+        // Calculate time distribution
+        const timeDistribution = statsService.calculateTimeDistribution(locationData);
+        stats.timeDistribution = timeDistribution;
+
+        // Calculate top customers
+        stats.topCustomers = statsService.calculateTopCustomers(locationData, 'revenue', 3);
+
+        // Calculate monthly payments
+        stats.monthlyPayments = statsService.calculateMonthlyPayments(locationData);
+        
+        setLocationStats(stats);
+        console.log('[LocationReport] Location statistics calculated:', stats);
+      },
+      {
+        severity: ErrorSeverity.ERROR,
+        category: ErrorCategory.DATA,
+        metadata: {
+          operation: 'calculateLocationStats',
+          locationName,
+          dataPoints: locationData.length
+        }
       }
-
-      // Calculate averages
-      stats.avgBookingValue = Math.round(stats.totalCollection / stats.totalBookings / 100) * 100;
-      stats.avgSlotsPerBooking = Math.round(stats.totalSlots / stats.totalBookings);
-
-      // Calculate completion rate
-      const completedBookings = locationData.filter(b => b.Status === 'Confirmed').length;
-      stats.completionRate = (completedBookings / stats.totalBookings) * 100;
-
-      // Calculate online bookings
-      stats.onlineBookings = locationData.filter(b => b.Source === 'Online').length;
-      stats.onlineBookingPercentage = (stats.onlineBookings / stats.totalBookings) * 100;
-
-      // Calculate time distribution
-      const timeDistribution = statsService.calculateTimeDistribution(locationData);
-      stats.timeDistribution = timeDistribution;
-
-      // Calculate top customers
-      stats.topCustomers = statsService.calculateTopCustomers(locationData, 'revenue', 3);
-
-      // Calculate monthly payments
-      stats.monthlyPayments = statsService.calculateMonthlyPayments(locationData);
-      
-      setLocationStats(stats);
-      console.log('[LocationReport] Location statistics calculated:', stats);
-    } catch (error) {
-      console.error('[LocationReport] Error calculating location statistics:', error);
-      trackError(
-        error,
-        'LocationReport.calculateLocationStats',
-        ErrorSeverity.ERROR,
-        ErrorCategory.DATA
-      );
-    }
-  }, [locationData, locationName, trackError]);
+    );
+  }, [locationData, locationName, handleAsync]);
 
   // Function to handle report export
   const handleExport = (format = 'txt') => {

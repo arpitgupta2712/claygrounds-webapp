@@ -1,5 +1,5 @@
 import { createContext, useState, useContext, useReducer, useCallback, useEffect, useMemo } from 'react';
-import { useErrorTracker } from '../hooks/useErrorTracker';
+import { useErrorHandler } from '../hooks/useErrorHandler';
 import { ErrorSeverity, ErrorCategory } from '../utils/errorTypes';
 import { CONSTANTS, ViewTypes, FilterTypes } from '../utils/constants';
 import { statsService } from '../services/statsService';
@@ -101,222 +101,239 @@ export function useApp() {
 
 export function AppProvider({ children }) {
   const [state, dispatch] = useReducer(appReducer, initialState);
-  const { trackError } = useErrorTracker();
+  const { handleAsync, handleError } = useErrorHandler();
   
-  // Action creators with error tracking
+  // Action creators with error handling
   const setBookingsData = useCallback((data) => {
     console.log('[AppContext] Setting bookings data, length:', data?.length);
     if (!data) return;
     
-    // Make the data available globally for debugging
-    if (Array.isArray(data) && data.length > 0) {
-      console.log('[AppContext] Making bookings data available globally');
-      window.__BOOKINGS_DATA = data;
-    } else {
-      console.log('[AppContext] No bookings data to make available globally');
-      delete window.__BOOKINGS_DATA;
-    }
-    
-    dispatch({ type: ActionTypes.SET_BOOKINGS_DATA, payload: data });
-  }, []);
-  
-  const setFilteredData = useCallback((data) => {
-    try {
-      console.log('[AppContext] Setting filtered data, length:', data?.length);
-      dispatch({ type: ActionTypes.SET_FILTERED_DATA, payload: data });
-    } catch (error) {
-      console.error('[AppContext] Error setting filtered data:', error);
-      trackError(
-        error,
-        'AppContext.setFilteredData',
-        ErrorSeverity.ERROR,
-        ErrorCategory.DATA
-      );
-    }
-  }, [trackError]);
-  
-  const setCurrentPage = useCallback((page) => {
-    try {
-      console.log('[AppContext] Setting current page:', page);
-      dispatch({ type: ActionTypes.SET_CURRENT_PAGE, payload: page });
-    } catch (error) {
-      console.error('[AppContext] Error setting current page:', error);
-      trackError(
-        error,
-        'AppContext.setCurrentPage',
-        ErrorSeverity.ERROR,
-        ErrorCategory.UI
-      );
-    }
-  }, [trackError]);
-  
-  const setCurrentView = useCallback((view) => {
-    try {
-      console.log('[AppContext] Setting current view:', view);
-      dispatch({ type: ActionTypes.SET_CURRENT_VIEW, payload: view });
-    } catch (error) {
-      console.error('[AppContext] Error setting current view:', error);
-      trackError(
-        error,
-        'AppContext.setCurrentView',
-        ErrorSeverity.ERROR,
-        ErrorCategory.UI
-      );
-    }
-  }, [trackError]);
-  
-  const setIsLoading = useCallback((isLoading) => {
-    try {
-      console.log('[AppContext] Setting loading state:', isLoading);
-      dispatch({ type: ActionTypes.SET_LOADING, payload: isLoading });
-    } catch (error) {
-      console.error('[AppContext] Error setting loading state:', error);
-      trackError(
-        error,
-        'AppContext.setIsLoading',
-        ErrorSeverity.ERROR,
-        ErrorCategory.UI
-      );
-    }
-  }, [trackError]);
-  
-  const setSelectedYear = useCallback((year) => {
-    try {
-      // Only proceed if the year is actually different
-      if (year !== state.selectedYear) {
-        console.log('[AppContext] Setting selected year:', year);
-        
-        // Clear stats cache for the previous year
-        if (state.selectedYear) {
-          statsService.clearCacheForYear(state.selectedYear);
+    handleAsync(
+      async () => {
+        // Make the data available globally for debugging
+        if (Array.isArray(data) && data.length > 0) {
+          console.log('[AppContext] Making bookings data available globally');
+          window.__BOOKINGS_DATA = data;
+        } else {
+          console.log('[AppContext] No bookings data to make available globally');
+          delete window.__BOOKINGS_DATA;
         }
         
-        dispatch({ type: ActionTypes.SET_SELECTED_YEAR, payload: year });
-      } else {
-        console.log('[AppContext] Year unchanged, skipping update:', year);
+        dispatch({ type: ActionTypes.SET_BOOKINGS_DATA, payload: data });
+      },
+      'AppContext.setBookingsData',
+      {
+        severity: ErrorSeverity.ERROR,
+        category: ErrorCategory.DATA,
+        metadata: {
+          dataLength: data?.length,
+          hasData: !!data
+        }
       }
-    } catch (error) {
-      console.error('[AppContext] Error setting selected year:', error);
-      trackError(
-        error,
-        'AppContext.setSelectedYear',
-        ErrorSeverity.ERROR,
-        ErrorCategory.UI
-      );
-    }
-  }, [trackError, state.selectedYear]);
+    );
+  }, [handleAsync]);
+  
+  const setFilteredData = useCallback((data) => {
+    handleAsync(
+      async () => {
+        console.log('[AppContext] Setting filtered data, length:', data?.length);
+        dispatch({ type: ActionTypes.SET_FILTERED_DATA, payload: data });
+      },
+      'AppContext.setFilteredData',
+      {
+        severity: ErrorSeverity.ERROR,
+        category: ErrorCategory.DATA,
+        metadata: {
+          dataLength: data?.length,
+          hasData: !!data
+        }
+      }
+    );
+  }, [handleAsync]);
+  
+  const setCurrentPage = useCallback((page) => {
+    handleAsync(
+      async () => {
+        console.log('[AppContext] Setting current page:', page);
+        dispatch({ type: ActionTypes.SET_CURRENT_PAGE, payload: page });
+      },
+      'AppContext.setCurrentPage',
+      {
+        severity: ErrorSeverity.ERROR,
+        category: ErrorCategory.UI,
+        metadata: {
+          page,
+          previousPage: state.currentPage
+        }
+      }
+    );
+  }, [handleAsync, state.currentPage]);
+  
+  const setCurrentView = useCallback((view) => {
+    handleAsync(
+      async () => {
+        console.log('[AppContext] Setting current view:', view);
+        dispatch({ type: ActionTypes.SET_CURRENT_VIEW, payload: view });
+      },
+      'AppContext.setCurrentView',
+      {
+        severity: ErrorSeverity.ERROR,
+        category: ErrorCategory.UI,
+        metadata: {
+          view,
+          previousView: state.currentView
+        }
+      }
+    );
+  }, [handleAsync, state.currentView]);
+  
+  const setIsLoading = useCallback((isLoading) => {
+    handleAsync(
+      async () => {
+        console.log('[AppContext] Setting loading state:', isLoading);
+        dispatch({ type: ActionTypes.SET_LOADING, payload: isLoading });
+      },
+      'AppContext.setIsLoading',
+      {
+        severity: ErrorSeverity.ERROR,
+        category: ErrorCategory.UI,
+        metadata: {
+          isLoading,
+          previousLoadingState: state.isLoading
+        }
+      }
+    );
+  }, [handleAsync, state.isLoading]);
+  
+  const setSelectedYear = useCallback((year) => {
+    handleAsync(
+      async () => {
+        // Only proceed if the year is actually different
+        if (year !== state.selectedYear) {
+          console.log('[AppContext] Setting selected year:', year);
+          
+          // Clear stats cache for the previous year
+          if (state.selectedYear) {
+            statsService.clearCacheForYear(state.selectedYear);
+          }
+          
+          dispatch({ type: ActionTypes.SET_SELECTED_YEAR, payload: year });
+        } else {
+          console.log('[AppContext] Year unchanged, skipping update:', year);
+        }
+      },
+      'AppContext.setSelectedYear',
+      {
+        severity: ErrorSeverity.ERROR,
+        category: ErrorCategory.UI,
+        metadata: {
+          year,
+          previousYear: state.selectedYear,
+          isYearChange: year !== state.selectedYear
+        }
+      }
+    );
+  }, [handleAsync, state.selectedYear]);
   
   const setActiveFilters = useCallback((filters) => {
-    try {
-      console.log('[AppContext] Setting active filters:', filters);
-      dispatch({ type: ActionTypes.SET_ACTIVE_FILTERS, payload: filters });
-    } catch (error) {
-      console.error('[AppContext] Error setting active filters:', error);
-      trackError(
-        error,
-        'AppContext.setActiveFilters',
-        ErrorSeverity.ERROR,
-        ErrorCategory.DATA
-      );
-    }
-  }, [trackError]);
+    handleAsync(
+      async () => {
+        console.log('[AppContext] Setting active filters:', filters);
+        dispatch({ type: ActionTypes.SET_ACTIVE_FILTERS, payload: filters });
+      },
+      'AppContext.setActiveFilters',
+      {
+        severity: ErrorSeverity.ERROR,
+        category: ErrorCategory.DATA,
+        metadata: {
+          filters,
+          previousFilters: state.activeFilters,
+          hasFilters: !!filters?.type || !!filters?.value
+        }
+      }
+    );
+  }, [handleAsync, state.activeFilters]);
   
   const setCategoryType = useCallback((categoryType) => {
-    try {
-      console.log('[AppContext] Setting category type:', categoryType);
-      dispatch({ type: ActionTypes.SET_CATEGORY_TYPE, payload: categoryType });
-    } catch (error) {
-      console.error('[AppContext] Error setting category type:', error);
-      trackError(
-        error,
-        'AppContext.setCategoryType',
-        ErrorSeverity.ERROR,
-        ErrorCategory.UI
-      );
-    }
-  }, [trackError]);
+    handleAsync(
+      async () => {
+        console.log('[AppContext] Setting category type:', categoryType);
+        dispatch({ type: ActionTypes.SET_CATEGORY_TYPE, payload: categoryType });
+      },
+      'AppContext.setCategoryType',
+      {
+        severity: ErrorSeverity.ERROR,
+        category: ErrorCategory.UI,
+        metadata: {
+          categoryType,
+          previousType: state.currentCategoryType
+        }
+      }
+    );
+  }, [handleAsync, state.currentCategoryType]);
   
   const setSelectedCategory = useCallback((category) => {
-    try {
-      console.log('[AppContext] Setting selected category:', category);
-      dispatch({ type: ActionTypes.SET_SELECTED_CATEGORY, payload: category });
-    } catch (error) {
-      console.error('[AppContext] Error setting selected category:', error);
-      trackError(
-        error,
-        'AppContext.setSelectedCategory',
-        ErrorSeverity.ERROR,
-        ErrorCategory.UI
-      );
-    }
-  }, [trackError]);
+    handleAsync(
+      async () => {
+        console.log('[AppContext] Setting selected category:', category);
+        dispatch({ type: ActionTypes.SET_SELECTED_CATEGORY, payload: category });
+      },
+      'AppContext.setSelectedCategory',
+      {
+        severity: ErrorSeverity.ERROR,
+        category: ErrorCategory.UI,
+        metadata: {
+          category,
+          previousCategory: state.selectedCategory,
+          categoryType: state.currentCategoryType
+        }
+      }
+    );
+  }, [handleAsync, state.selectedCategory, state.currentCategoryType]);
   
   const setSort = useCallback((field, direction) => {
-    try {
-      console.log(`[AppContext] Setting sort: ${field} ${direction}`);
-      dispatch({ 
-        type: ActionTypes.SET_SORT, 
-        payload: { field, direction } 
-      });
-    } catch (error) {
-      console.error('[AppContext] Error setting sort:', error);
-      trackError(
-        error,
-        'AppContext.setSort',
-        ErrorSeverity.ERROR,
-        ErrorCategory.UI
-      );
-    }
-  }, [trackError]);
+    handleAsync(
+      async () => {
+        console.log('[AppContext] Setting sort:', { field, direction });
+        dispatch({ 
+          type: ActionTypes.SET_SORT, 
+          payload: { field, direction }
+        });
+      },
+      'AppContext.setSort',
+      {
+        severity: ErrorSeverity.ERROR,
+        category: ErrorCategory.UI,
+        metadata: {
+          field,
+          direction,
+          previousField: state.sortField,
+          previousDirection: state.sortDirection
+        }
+      }
+    );
+  }, [handleAsync, state.sortField, state.sortDirection]);
   
   const batchUpdate = useCallback((updates) => {
-    // Skip update if nothing changed
-    const changedKeys = Object.entries(updates).filter(
-      ([key, value]) => state[key] !== value && value !== undefined
-    ).map(([key]) => key);
-    
-    if (changedKeys.length === 0) {
-      console.debug('[AppContext] No changes detected, skipping update');
-      return;
-    }
-    
-    // Only include changed values in the update
-    const changedUpdates = changedKeys.reduce((acc, key) => {
-      acc[key] = updates[key];
-      return acc;
-    }, {});
-    
-    console.debug('[AppContext] Batch updating state:', changedKeys);
-    dispatch({ type: ActionTypes.BATCH_UPDATE, payload: changedUpdates });
-  }, [state]);
-  
-  // Initialization flag
-  window.BOOKINGS_DATA_READY = window.BOOKINGS_DATA_READY || false;
-  
-  // Memoize the context value to prevent unnecessary renders
-  const value = useMemo(() => ({
-    // State
+    handleAsync(
+      async () => {
+        console.log('[AppContext] Performing batch update:', updates);
+        dispatch({ type: ActionTypes.BATCH_UPDATE, payload: updates });
+      },
+      'AppContext.batchUpdate',
+      {
+        severity: ErrorSeverity.ERROR,
+        category: ErrorCategory.DATA,
+        metadata: {
+          updateKeys: Object.keys(updates),
+          hasUpdates: !!updates && Object.keys(updates).length > 0
+        }
+      }
+    );
+  }, [handleAsync]);
+
+  const value = {
     ...state,
-    
-    // Actions
-    setBookingsData,
-    setFilteredData,
-    setCurrentPage,
-    setCurrentView,
-    setIsLoading,
-    setSelectedYear,
-    setActiveFilters,
-    setCategoryType,
-    setSelectedCategory,
-    setSort,
-    batchUpdate,
-    
-    // Constants
-    CONSTANTS,
-    ViewTypes,
-    FilterTypes,
-  }), [
-    state,
     setBookingsData,
     setFilteredData,
     setCurrentPage,
@@ -328,26 +345,8 @@ export function AppProvider({ children }) {
     setSelectedCategory,
     setSort,
     batchUpdate
-  ]);
-  
-  // Make data available globally for debugging only in development
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      if (state.bookingsData?.length > 0) {
-        console.log(`[AppContext] Making ${state.bookingsData.length} bookings available globally via window.appData`);
-        window.appData = {
-          bookingsData: state.bookingsData,
-          filteredData: state.filteredData,
-          selectedYear: state.selectedYear
-        };
-        window.BOOKINGS_DATA_READY = true;
-      } else {
-        console.log('[AppContext] No bookings data to make available globally');
-        window.BOOKINGS_DATA_READY = false;
-      }
-    }
-  }, [state.bookingsData, state.filteredData, state.selectedYear]);
-  
+  };
+
   return (
     <AppContext.Provider value={value}>
       {children}

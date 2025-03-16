@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, memo } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useBookings } from '../../hooks/useBookings';
-import { useErrorTracker } from '../../hooks/useErrorTracker';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity, ErrorCategory } from '../../utils/errorTypes';
 import BookingTable from './BookingTable';
 import TablePagination from './TablePagination';
@@ -25,80 +25,84 @@ function TableView() {
   } = useApp();
   
   const { applySorting } = useBookings();
-  const { trackError } = useErrorTracker();
+  const { handleAsync } = useErrorHandler();
   
   // Calculate pagination and set current page data
   useEffect(() => {
-    try {
-      if (!filteredData || !Array.isArray(filteredData)) {
-        console.warn('[TableView] No filtered data available');
-        setPageData([]);
-        return;
+    handleAsync(
+      async () => {
+        if (!filteredData || !Array.isArray(filteredData)) {
+          console.warn('[TableView] No filtered data available');
+          setPageData([]);
+          return;
+        }
+        
+        console.log(`[TableView] Calculating pagination for page ${currentPage}`);
+        
+        // Calculate start and end indices
+        const startIndex = (currentPage - 1) * rowsPerPage;
+        const endIndex = startIndex + rowsPerPage;
+        
+        // Set current page data
+        const paginatedData = filteredData.slice(startIndex, endIndex);
+        setPageData(paginatedData);
+        
+        console.log(`[TableView] Showing ${paginatedData.length} records (${startIndex + 1} to ${Math.min(endIndex, filteredData.length)} of ${filteredData.length})`);
+      },
+      'TableView.calculatePagination',
+      {
+        severity: ErrorSeverity.ERROR,
+        category: ErrorCategory.UI,
+        metadata: {
+          currentPage,
+          rowsPerPage,
+          totalRecords: filteredData?.length
+        }
       }
-      
-      console.log(`[TableView] Calculating pagination for page ${currentPage}`);
-      
-      // Calculate start and end indices
-      const startIndex = (currentPage - 1) * rowsPerPage;
-      const endIndex = startIndex + rowsPerPage;
-      
-      // Set current page data
-      const paginatedData = filteredData.slice(startIndex, endIndex);
-      setPageData(paginatedData);
-      
-      console.log(`[TableView] Showing ${paginatedData.length} records (${startIndex + 1} to ${Math.min(endIndex, filteredData.length)} of ${filteredData.length})`);
-    } catch (error) {
-      console.error('[TableView] Error calculating pagination:', error);
-      trackError(
-        error,
-        'TableView.useEffect(pagination)',
-        ErrorSeverity.ERROR,
-        ErrorCategory.UI
-      );
-      
-      setPageData([]);
-    }
-  }, [filteredData, currentPage, rowsPerPage, trackError]);
+    );
+  }, [filteredData, currentPage, rowsPerPage, handleAsync]);
   
   /**
    * Handle row click to show booking details
    * @param {Object} booking - Booking data for the clicked row
    */
-  const handleRowClick = useCallback((booking) => {
-    try {
-      console.log('[TableView] Row clicked, showing booking details');
-      setSelectedBooking(booking);
-      setShowModal(true);
-    } catch (error) {
-      console.error('[TableView] Error handling row click:', error);
-      trackError(
-        error,
-        'TableView.handleRowClick',
-        ErrorSeverity.ERROR,
-        ErrorCategory.UI
-      );
-    }
-  }, [trackError]);
+  const handleRowClick = useCallback(async (booking) => {
+    await handleAsync(
+      async () => {
+        console.log('[TableView] Row clicked, showing booking details');
+        setSelectedBooking(booking);
+        setShowModal(true);
+      },
+      'TableView.handleRowClick',
+      {
+        severity: ErrorSeverity.ERROR,
+        category: ErrorCategory.UI,
+        metadata: {
+          bookingId: booking?.id,
+          bookingDate: booking?.date
+        }
+      }
+    );
+  }, [handleAsync]);
   
   /**
    * Handle header click for sorting
    * @param {string} field - Field to sort by
    */
-  const handleHeaderClick = useCallback((field) => {
-    try {
-      console.log(`[TableView] Header clicked for field: ${field}`);
-      applySorting(field);
-    } catch (error) {
-      console.error(`[TableView] Error sorting by ${field}:`, error);
-      trackError(
-        error,
-        'TableView.handleHeaderClick',
-        ErrorSeverity.ERROR,
-        ErrorCategory.UI,
-        { field }
-      );
-    }
-  }, [applySorting, trackError]);
+  const handleHeaderClick = useCallback(async (field) => {
+    await handleAsync(
+      async () => {
+        console.log(`[TableView] Header clicked for field: ${field}`);
+        await applySorting(field);
+      },
+      'TableView.handleHeaderClick',
+      {
+        severity: ErrorSeverity.ERROR,
+        category: ErrorCategory.UI,
+        metadata: { field }
+      }
+    );
+  }, [applySorting, handleAsync]);
   
   /**
    * Handle pagination change
@@ -116,15 +120,19 @@ function TableView() {
       });
     } catch (error) {
       console.error(`[TableView] Error changing page to ${page}:`, error);
-      trackError(
-        error,
+      handleAsync(
+        async () => {
+          // Handle error (e.g., show error message to user)
+        },
         'TableView.handlePageChange',
-        ErrorSeverity.ERROR,
-        ErrorCategory.UI,
-        { page }
+        {
+          severity: ErrorSeverity.ERROR,
+          category: ErrorCategory.UI,
+          metadata: { page }
+        }
       );
     }
-  }, [setCurrentPage, trackError]);
+  }, [setCurrentPage, handleAsync]);
   
   /**
    * Close the booking detail modal

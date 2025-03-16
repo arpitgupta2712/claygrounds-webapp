@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useErrorTracker } from '../../hooks/useErrorTracker';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity, ErrorCategory } from '../../utils/errorTypes';
 
 const severityColors = {
@@ -10,7 +10,7 @@ const severityColors = {
 };
 
 function ErrorDashboard() {
-  const { errors, trackError } = useErrorTracker();
+  const { errors, handleError, handleAsync } = useErrorHandler();
   const [filter, setFilter] = useState({
     severity: 'all',
     category: 'all',
@@ -18,7 +18,7 @@ function ErrorDashboard() {
   });
 
   // Function to generate test errors
-  const generateTestError = (severity, category) => {
+  const generateTestError = async (severity, category) => {
     const errorMessages = {
       [ErrorSeverity.INFO]: 'This is a test info message',
       [ErrorSeverity.WARNING]: 'This is a test warning message',
@@ -26,12 +26,36 @@ function ErrorDashboard() {
       [ErrorSeverity.CRITICAL]: 'This is a test critical error message'
     };
 
-    trackError(
-      new Error(errorMessages[severity]),
-      'test',
-      severity,
-      category,
-      { test: true, timestamp: new Date().toISOString() }
+    // Simulate an async operation that might fail
+    await handleAsync(
+      async () => {
+        if (severity === ErrorSeverity.CRITICAL) {
+          throw new Error(errorMessages[severity]);
+        }
+        // For non-critical errors, we'll explicitly call handleError
+        handleError(
+          new Error(errorMessages[severity]),
+          {
+            severity,
+            category,
+            metadata: {
+              test: true,
+              timestamp: new Date().toISOString(),
+              source: 'ErrorDashboard'
+            }
+          }
+        );
+      },
+      {
+        severity,
+        category,
+        rethrow: false,
+        metadata: {
+          test: true,
+          timestamp: new Date().toISOString(),
+          source: 'ErrorDashboard'
+        }
+      }
     );
   };
 

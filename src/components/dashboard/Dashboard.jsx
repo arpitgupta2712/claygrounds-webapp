@@ -5,7 +5,7 @@ import { useBookings } from '../../hooks/useBookings';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ViewTypes } from '../../utils/constants';
 import { ErrorSeverity, ErrorCategory } from '../../utils/errorTypes';
-import { ErrorDisplay } from '../../hooks/useErrorTracker';
+import { ErrorDisplay } from '../../context/ErrorContext';
 import { ToastContainer } from '../../hooks/useToast';
 import { dataService } from '../../services/dataService';
 import ScrollToTop from '../common/ScrollToTop';

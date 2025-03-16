@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { useErrorTracker } from '../../hooks/useErrorTracker';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity, ErrorCategory } from '../../utils/errorTypes';
 
 /**
@@ -9,25 +9,28 @@ import { ErrorSeverity, ErrorCategory } from '../../utils/errorTypes';
 function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const { user, signOut, isDevelopment } = useAuth();
-  const { trackError } = useErrorTracker();
+  const { handleAsync } = useErrorHandler();
 
   /**
    * Handle sign out action
    */
   const handleSignOut = async () => {
-    try {
-      console.log('[Header] User signing out');
-      await signOut();
-      // Redirect handled by AuthContext
-    } catch (error) {
-      console.error('[Header] Error signing out:', error);
-      trackError(
-        error,
-        'Header.handleSignOut',
-        ErrorSeverity.ERROR,
-        ErrorCategory.AUTH
-      );
-    }
+    await handleAsync(
+      async () => {
+        console.log('[Header] User signing out');
+        await signOut();
+        // Redirect handled by AuthContext
+      },
+      'Header.handleSignOut',
+      {
+        severity: ErrorSeverity.ERROR,
+        category: ErrorCategory.AUTH,
+        metadata: {
+          userId: user?.id,
+          isDevelopment
+        }
+      }
+    );
   };
 
   /**
