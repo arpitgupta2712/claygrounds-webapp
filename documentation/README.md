@@ -9,6 +9,7 @@ ClayGrounds is a comprehensive booking management system designed for sports loc
 - Secure login system built with Supabase authentication
 - Protected routes to ensure only authorized users can access the application
 - Session management and persistence
+- Role-based access control for different user types
 
 ### Dashboard
 - Central control center providing quick access to all views
@@ -22,7 +23,7 @@ ClayGrounds is a comprehensive booking management system designed for sports loc
   - Category Views: Data segmentation by location, month, sport, status, and source
   - Summary Views: Aggregated statistics and performance metrics
   - Financial Reports: Year-wise and month-wise booking analysis
-- **Interactive Charts**: Visual representation of booking trends and patterns
+- **Interactive Charts**: Visual representation of booking trends and patterns using Chart.js
 - **PDF Reporting**: 
   - Comprehensive PDF exports using jsPDF and jsPDF-autotable
   - Location-wise booking reports
@@ -35,13 +36,15 @@ ClayGrounds is a comprehensive booking management system designed for sports loc
 - Performance tracking across multiple venues
 - Comparative analysis between locations
 - Location-specific reporting and statistics
+- Role-based access to location data
 
 ### Financial Management
 - Financial year-based data organization
-- Monthly revenue tracking
+- Monthly revenue tracking and reporting
 - Date-wise booking analysis
 - Custom date range filtering
 - Advanced financial reporting capabilities
+- Payment mode analysis (Cash, Bank Transfer, Hudle)
 
 ### Responsive Design
 - Mobile-first approach with optimized layouts for all devices
@@ -53,10 +56,10 @@ ClayGrounds is a comprehensive booking management system designed for sports loc
 ### Frontend Framework
 - **React 18**: Component-based UI architecture with hooks pattern
 - **React Router v7**: Navigation and routing system
-- **Vite**: Fast build tool and development server
+- **Vite**: Fast build tool and development server with HMR optimization
 
 ### State Management
-- **React Context API**: Global state management via AuthContext and AppContext
+- **React Context API**: Global state management via AuthContext, AppContext, and ErrorContext
 - **Custom Hooks**: 
   - useBookings: Booking data management
   - useFilters: Advanced filtering system
@@ -68,6 +71,7 @@ ClayGrounds is a comprehensive booking management system designed for sports loc
 - **Financial Year Logic**: Specialized processing for financial year data
 - **Data Aggregation**: Advanced statistics calculation
 - **PDF Generation**: Custom PDF layout and generation system
+- **CSV Parsing**: PapaParse for data import and processing
 
 ### Styling & UI
 - **Tailwind CSS**: Utility-first CSS framework with custom theme configuration
@@ -75,51 +79,126 @@ ClayGrounds is a comprehensive booking management system designed for sports loc
 - **PT Sans Font**: Clean, readable typography optimized for data-heavy interfaces
 
 ### Data Management
-- **Supabase**: Backend-as-a-Service platform for database operations
+- **Supabase**: Backend-as-a-Service platform for database operations and authentication
 - **PapaParse**: CSV parsing and manipulation
 - **Local Storage**: Persistent preferences and session handling
+
+### Visualization
+- **Chart.js**: Interactive data visualization
+- **React-ChartJS-2**: React wrapper for Chart.js
+- **jsPDF**: PDF generation for reports
+- **jsPDF-autotable**: Enhanced table support for PDF reports
+
+### Development & Testing
+- **ESLint**: Code quality and consistency
+- **Performance Monitoring**: Custom development tools for monitoring performance metrics
+- **Error Tracking**: Comprehensive error logging and tracking system
 
 ### Deployment
 - **Netlify**: Continuous deployment with custom configuration
 - **Custom security headers**: Enhanced application security via Netlify configuration
+- **Environment-specific settings**: Development, staging, and production configurations
 
 ## Project Structure
 
 ```
 claygrounds-webapp/
 │
-├── public/                # Static assets
-│   └── mock-data/        # Sample CSV data files
+├── public/                # Static assets and mock data
+│   ├── images/            # Application images and logo
+│   └── mock-data/         # Sample CSV data files
 │
 ├── src/
 │   ├── components/       
-│   │   ├── auth/         # Authentication components
-│   │   ├── common/       # Shared components
-│   │   ├── dashboard/    # Dashboard and navigation
-│   │   ├── category/     # Category-based views
-│   │   ├── payments/     # Payment analysis views
-│   │   ├── report/       # PDF report generation
-│   │   ├── summary/      # Statistics components
-│   │   └── table/        # Data table components
+│   │   ├── auth/          # Authentication components
+│   │   │   ├── LoginPage.jsx
+│   │   │   └── ProtectedRoute.jsx
+│   │   ├── common/        # Shared components
+│   │   │   ├── EmptyState.jsx
+│   │   │   ├── ErrorBoundary.jsx
+│   │   │   ├── Loading.jsx
+│   │   │   └── ScrollToTop.jsx
+│   │   ├── dashboard/     # Dashboard and navigation
+│   │   │   ├── Dashboard.jsx
+│   │   │   ├── Header.jsx
+│   │   │   └── Navigation.jsx
+│   │   ├── category/      # Category-based views
+│   │   │   ├── CategoryView.jsx
+│   │   │   ├── CategoryList.jsx
+│   │   │   └── CategoryCard.jsx
+│   │   ├── payments/      # Payment analysis views
+│   │   │   ├── PaymentsView.jsx
+│   │   │   ├── DailyView.jsx
+│   │   │   └── MonthlyView.jsx
+│   │   ├── reports/       # PDF report generation
+│   │   │   ├── GlobalReport.jsx
+│   │   │   └── LocationReport.jsx
+│   │   ├── summary/       # Statistics components
+│   │   │   ├── SummaryStats.jsx
+│   │   │   └── StatsCard.jsx
+│   │   ├── table/         # Data table components
+│   │   │   ├── BookingTable.jsx
+│   │   │   ├── TableView.jsx
+│   │   │   └── TablePagination.jsx
+│   │   ├── visualizations/ # Chart components
+│   │   │   ├── BaseChart.jsx
+│   │   │   ├── PaymentDistribution.jsx
+│   │   │   ├── StatusDistribution.jsx
+│   │   │   └── SourceDistribution.jsx
+│   │   └── error/         # Error handling components
+│   │       └── ErrorDashboard.jsx
 │   │
-│   ├── context/          # React Context providers
-│   ├── hooks/            # Custom React hooks
-│   ├── services/         # API and data services
-│   ├── utils/            # Utility functions
-│   │   ├── dateUtils.js  # Date handling
-│   │   ├── formatUtils.js # Data formatting
-│   │   └── constants.js  # Application constants
+│   ├── context/           # React Context providers
+│   │   ├── AppContext.jsx # Application state management
+│   │   ├── AuthContext.jsx # Authentication state
+│   │   └── ErrorContext.jsx # Error handling state
 │   │
-│   ├── locations.json    # Location configuration
-│   └── main.jsx         # Application entry
+│   ├── hooks/             # Custom React hooks
+│   │   ├── useBookings.jsx
+│   │   ├── useErrorHandler.js
+│   │   ├── useErrorTracker.jsx
+│   │   ├── useFilters.jsx
+│   │   └── useToast.jsx
+│   │
+│   ├── services/          # API and data services
+│   │   ├── dataService.js  # Data loading and processing
+│   │   ├── statsService.js # Statistical calculations
+│   │   ├── filterService.js # Data filtering
+│   │   ├── sortService.js  # Data sorting
+│   │   ├── groupingService.js # Data grouping
+│   │   ├── supabase.js    # Supabase client configuration
+│   │   └── errorService.js # Error handling service
+│   │
+│   ├── utils/             # Utility functions
+│   │   ├── dateUtils.js   # Date handling functions
+│   │   ├── dataUtils.js   # Data manipulation utilities
+│   │   ├── formatUtils.js # Data formatting utilities
+│   │   ├── constants.js   # Application constants
+│   │   ├── errorTypes.js  # Error type definitions
+│   │   └── devOptimizations.js # Development optimizations
+│   │
+│   ├── vite/              # Vite configuration
+│   │   └── devOptimizations.js
+│   │
+│   ├── App.jsx            # Main application component
+│   ├── main.jsx           # Application entry point
+│   ├── index.css          # Global CSS styles
+│   ├── locations.json     # Location configuration data
+│   └── routes.js          # Route configuration
 │
-└── configuration files   # Build and deployment configs
+├── netlify.toml           # Netlify deployment configuration
+├── package.json           # Project dependencies and scripts
+├── vite.config.js         # Vite configuration
+├── tailwind.config.js     # Tailwind CSS configuration
+├── eslint.config.js       # ESLint configuration
+├── postcss.config.js      # PostCSS configuration
+└── backup.sh              # Backup script for the project
 ```
 
 ## Architecture
 
 ### Application Flow
-1. **Authentication**: Users log in via Supabase auth system
+1. **Authentication**: Users log in via Supabase auth system (Google OAuth)
 2. **Route Protection**: ProtectedRoute component ensures authenticated access
 3. **Data Processing**: 
    - CSV data parsing and validation
@@ -138,6 +217,7 @@ claygrounds-webapp/
 - **Custom Hooks**: Specialized hooks for business logic
 - **Error Boundaries**: Graceful failure handling with error tracking
 - **Toast Notifications**: User feedback system
+- **Memoization**: Performance optimizations with React.memo and useMemo
 
 ### Data Flow
 - **Input Processing**: CSV data validation and parsing
@@ -145,6 +225,7 @@ claygrounds-webapp/
 - **Financial Logic**: Year categorization and calculations
 - **Location Management**: Centralized location configuration
 - **Report Generation**: PDF creation and formatting
+- **Error Tracking**: Comprehensive error logging and tracking
 
 ### CSS Architecture
 - **Theme Configuration**: Custom color palette and typography
@@ -153,10 +234,25 @@ claygrounds-webapp/
 - **Custom Animations**: Enhanced user interactions
 - **Print Styles**: PDF-optimized layouts
 
+## Performance Optimizations
+- **React Memoization**: Preventing unnecessary renders with useMemo and React.memo
+- **List Virtualization**: Optimized rendering of large data sets with @tanstack/react-virtual
+- **Data Caching**: Minimizing redundant data processing
+- **Code Splitting**: Lazy loading of components
+- **Development Mode Monitoring**: Real-time performance tracking
+
+## Error Handling System
+- **Error Boundaries**: Component-level error isolation
+- **Global Error Tracking**: Centralized error logging
+- **Error Dashboard**: Visualization and analysis of application errors
+- **Severity Levels**: Prioritization of errors (info, warning, error, critical)
+- **Error Categories**: Classification by type (UI, data, network, auth)
+- **Toast Notifications**: User-friendly error messages
+
 ## Setup & Development
 
 ### Prerequisites
-- Node.js (v16.x or higher)
+- Node.js (v18.x or higher)
 - npm (v8.x or higher)
 - Git for version control
 
@@ -199,6 +295,10 @@ VITE_SUPABASE_URL=your_supabase_project_url
 VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 VITE_APP_VERSION=1.0.0
 VITE_FINANCIAL_YEAR=2024-25
+VITE_APP_ENV=development
+VITE_SITE_URL=http://localhost:3000
+VITE_ENABLE_MOCK_DATA=true
+VITE_ENABLE_DEBUG_LOGGING=true
 ```
 
 ### Required Variables
@@ -206,6 +306,10 @@ VITE_FINANCIAL_YEAR=2024-25
 - `VITE_SUPABASE_ANON_KEY`: Supabase anonymous API key
 - `VITE_APP_VERSION`: Current application version
 - `VITE_FINANCIAL_YEAR`: Current financial year for data processing
+- `VITE_APP_ENV`: Application environment (development, production)
+- `VITE_SITE_URL`: Base URL for the application
+- `VITE_ENABLE_MOCK_DATA`: Enable mock data for development
+- `VITE_ENABLE_DEBUG_LOGGING`: Enable detailed debug logging
 
 ## Deployment
 
@@ -215,7 +319,7 @@ The application is configured for deployment on Netlify:
 1. **Build Settings**:
    - Build Command: `npm run build`
    - Publish Directory: `dist`
-   - Node Version: 16.x
+   - Node Version: 18.x
 
 2. **Environment Variables**:
    - Configure all required environment variables in Netlify dashboard
@@ -229,6 +333,8 @@ The application is configured for deployment on Netlify:
        X-Frame-Options = "DENY"
        X-XSS-Protection = "1; mode=block"
        X-Content-Type-Options = "nosniff"
+       Referrer-Policy = "strict-origin-when-cross-origin"
+       Content-Security-Policy = "frame-ancestors 'none'"
    ```
 
 4. **Redirects**:
@@ -248,6 +354,9 @@ The application is configured for deployment on Netlify:
    - Build compilation
    - Asset optimization
 4. Deployment to production URL
+
+## Future Enhancements
+Check out [ClayGrounds Future Scope](./docs/claygrounds-future-scope.md) for planned enhancements and feature roadmap.
 
 ## Contributing
 
