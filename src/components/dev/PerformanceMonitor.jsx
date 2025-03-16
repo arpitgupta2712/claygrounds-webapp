@@ -84,6 +84,8 @@ function PerformanceMonitor() {
     isFirstLoad: true
   });
 
+  const [isExpanded, setIsExpanded] = useState(false);
+
   useEffect(() => {
     if (process.env.NODE_ENV !== 'development') return;
 
@@ -223,105 +225,134 @@ function PerformanceMonitor() {
     ? metrics.memoryHistory[metrics.memoryHistory.length - 1] - metrics.memoryHistory[metrics.memoryHistory.length - 2]
     : 0;
 
-  // Calculate memory growth rate for the warning
   const memoryGrowthRate = metrics.memoryHistory.length > 1
     ? ((metrics.memoryHistory[metrics.memoryHistory.length - 1] - metrics.memoryHistory[0]) 
-       / metrics.memoryHistory.length) * (1000 / 2000) // Convert to MB/s
+       / metrics.memoryHistory.length) * (1000 / 2000)
     : 0;
 
-  // Add memory optimization suggestions to the UI
   const memorySuggestions = getMemoryOptimizationSuggestions(metrics);
 
+  // Minimized view when collapsed
+  if (!isExpanded) {
+    return (
+      <button
+        onClick={() => setIsExpanded(true)}
+        className="fixed bottom-0 right-0 m-4 p-2 bg-white rounded-lg shadow-lg text-sm font-mono z-50 hover:bg-gray-50 flex items-center gap-2"
+      >
+        <span className={`w-2 h-2 rounded-full ${
+          metrics.failedReloads > 0 ? 'bg-red-500' :
+          metrics.isFirstLoad ? 'bg-blue-500' :
+          isStale ? 'bg-yellow-500' :
+          'bg-green-500'
+        }`} />
+        <span className="text-xs">Metrics</span>
+      </button>
+    );
+  }
+
+  // Expanded view
   return (
-    <div className="fixed bottom-0 right-0 m-4 p-4 bg-white rounded-lg shadow-lg text-sm font-mono z-50 max-w-md">
-      <div className="flex justify-between items-center mb-3">
-        <h3 className="font-bold">Dev Performance Metrics</h3>
-        <div className="flex items-center gap-2">
+    <div className="fixed bottom-0 right-0 m-4 p-3 bg-white rounded-lg shadow-lg text-xs font-mono z-50 w-[250px]">
+      <div className="flex justify-between items-center mb-2">
+        <h3 className="font-bold text-xs">Dev Metrics</h3>
+        <div className="flex items-center gap-1">
           {metrics.failedReloads > 0 && (
-            <span className="text-xs px-2 py-1 bg-red-100 text-red-800 rounded">
-              {metrics.failedReloads} Failed
+            <span className="text-[10px] px-1.5 py-0.5 bg-red-100 text-red-800 rounded">
+              {metrics.failedReloads}!
             </span>
           )}
-          <span className={`text-xs px-2 py-1 rounded ${
+          <span className={`text-[10px] px-1.5 py-0.5 rounded ${
             metrics.isFirstLoad 
               ? 'bg-blue-100 text-blue-800'
               : isStale 
                 ? 'bg-yellow-100 text-yellow-800' 
                 : 'bg-green-100 text-green-800'
           }`}>
-            {metrics.isFirstLoad ? 'Initial Load' : isStale ? 'Stale Data' : 'Live'}
+            {metrics.isFirstLoad ? 'Initial' : isStale ? 'Stale' : 'Live'}
           </span>
+          <button
+            onClick={() => setIsExpanded(false)}
+            className="p-1 hover:bg-gray-100 rounded"
+            title="Minimize"
+          >
+            <svg className="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
         </div>
       </div>
       
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <h4 className="text-xs font-bold mb-2 text-gray-500">Page Load</h4>
-          <div className="space-y-1">
-            <p className={getPerformanceIndicator(metrics.initialLoadTime, THRESHOLDS.INITIAL_LOAD)}>
-              Initial: {formatTime(metrics.initialLoadTime)}
-            </p>
+      <div className="space-y-3 text-[11px]">
+        {/* Page Load */}
+        <div className="border-b border-gray-100 pb-2">
+          <div className="flex justify-between items-center text-[10px] font-bold text-gray-500 mb-1">
+            <span>Page Load</span>
+            <span>{formatTime(metrics.initialLoadTime)}</span>
+          </div>
+          <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
             <p className={getPerformanceIndicator(metrics.domContentLoaded, THRESHOLDS.DOM_READY)}>
-              DOM Ready: {formatTime(metrics.domContentLoaded)}
+              DOM: {formatTime(metrics.domContentLoaded)}
             </p>
             <p className={getPerformanceIndicator(metrics.firstPaint, THRESHOLDS.PAINT)}>
               Paint: {formatTime(metrics.firstPaint)}
             </p>
-            <p className={getPerformanceIndicator(metrics.firstContentfulPaint, THRESHOLDS.CONTENT)}>
-              Content: {formatTime(metrics.firstContentfulPaint)}
-            </p>
           </div>
         </div>
-        
-        <div>
-          <h4 className="text-xs font-bold mb-2 text-gray-500">HMR Stats</h4>
-          <div className="space-y-1">
+
+        {/* HMR Stats */}
+        <div className="border-b border-gray-100 pb-2">
+          <div className="flex justify-between items-center text-[10px] font-bold text-gray-500 mb-1">
+            <span>Hot Reload</span>
+            <span>{metrics.reloadCount} updates</span>
+          </div>
+          <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
             <p className={getPerformanceIndicator(metrics.lastReloadTime, THRESHOLDS.HMR)}>
               Last: {formatTime(metrics.lastReloadTime)}
             </p>
             <p className={getPerformanceIndicator(metrics.averageReloadTime, THRESHOLDS.HMR)}>
-              Average: {formatTime(metrics.averageReloadTime)}
+              Avg: {formatTime(metrics.averageReloadTime)}
             </p>
-            <p>Updates: {metrics.reloadCount}</p>
-            {metrics.failedReloads > 0 && (
-              <p className="text-red-600">Failed: {metrics.failedReloads}</p>
-            )}
           </div>
         </div>
 
-        <div>
-          <h4 className="text-xs font-bold mb-2 text-gray-500">Memory</h4>
-          <div className="space-y-1">
-            <p className={getPerformanceIndicator(memoryUsagePercent, THRESHOLDS.MEMORY_USAGE)}>
-              Usage: {memoryUsagePercent.toFixed(1)}%
+        {/* Memory */}
+        <div className="border-b border-gray-100 pb-2">
+          <div className="flex justify-between items-center text-[10px] font-bold text-gray-500 mb-1">
+            <span>Memory</span>
+            <span className={getPerformanceIndicator(memoryUsagePercent, THRESHOLDS.MEMORY_USAGE)}>
+              {memoryUsagePercent.toFixed(1)}% used
               {memoryTrend !== 0 && (
-                <span className={`ml-2 ${memoryTrend > 0 ? 'text-red-500' : 'text-green-500'}`}>
+                <span className={memoryTrend > 0 ? 'text-red-500 ml-1' : 'text-green-500 ml-1'}>
                   {memoryTrend > 0 ? '↑' : '↓'}
-                  {memoryGrowthRate > THRESHOLDS.MEMORY_GROWTH && ' (!)'} 
                 </span>
               )}
-            </p>
-            <p>Heap: {formatBytes(metrics.jsHeapSize * 1024 * 1024)} / {formatBytes(metrics.totalJSHeapSize * 1024 * 1024)}</p>
+            </span>
+          </div>
+          <div className="space-y-0.5">
+            <p>Heap: {formatBytes(metrics.jsHeapSize * 1024 * 1024)}</p>
             <p>Peak: {formatBytes(metrics.memoryPeak * 1024 * 1024)}</p>
-            {memorySuggestions.length > 0 && (
-              <div className="mt-2 p-2 bg-red-50 rounded text-xs text-red-600 space-y-1">
-                {memorySuggestions.map((suggestion, index) => (
-                  <p key={index}>{suggestion}</p>
-                ))}
-              </div>
-            )}
           </div>
         </div>
 
+        {/* Components */}
         <div>
-          <h4 className="text-xs font-bold mb-2 text-gray-500">Components</h4>
-          <div className="space-y-1">
-            <p>Updates: {metrics.componentUpdates}</p>
-            <p className={getPerformanceIndicator(timeSinceLastUpdate, { good: 5000, warning: 15000 })}>
-              Last: {formatTime(timeSinceLastUpdate)} ago
-            </p>
+          <div className="flex justify-between items-center text-[10px] font-bold text-gray-500 mb-1">
+            <span>Components</span>
+            <span>{metrics.componentUpdates} updates</span>
           </div>
+          <p className={getPerformanceIndicator(timeSinceLastUpdate, { good: 5000, warning: 15000 })}>
+            Last update: {formatTime(timeSinceLastUpdate)} ago
+          </p>
         </div>
+
+        {/* Memory Warnings */}
+        {memorySuggestions.length > 0 && (
+          <div className="mt-2 p-1.5 bg-red-50 rounded text-[10px] text-red-600 space-y-0.5 border border-red-100">
+            {memorySuggestions.map((suggestion, index) => (
+              <p key={index}>{suggestion}</p>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

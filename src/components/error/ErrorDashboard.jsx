@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
+import { useError } from '../../context/ErrorContext';
 import { ErrorSeverity, ErrorCategory } from '../../utils/errorTypes';
 
 const severityColors = {
@@ -10,7 +11,8 @@ const severityColors = {
 };
 
 function ErrorDashboard() {
-  const { errors, handleError, handleAsync } = useErrorHandler();
+  const { handleError, handleAsync } = useErrorHandler();
+  const { errors } = useError();
   const [filter, setFilter] = useState({
     severity: 'all',
     category: 'all',

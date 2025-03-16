@@ -4,6 +4,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useApp } from '../../context/AppContext';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
+import { useBookings } from '../../hooks/useBookings';
 import { ErrorSeverity, ErrorCategory } from '../../utils/errorTypes';
 import { dataUtils } from '../../utils/dataUtils';
 import { statsService } from '../../services/statsService';
@@ -384,65 +385,63 @@ function generatePDF(stats, locationName, year) {
  * @param {string} props.locationName The location name to display
  */
 function LocationReport({ locationId, locationName }) {
+  const { selectedYear } = useApp();
+  const { handleAsync } = useErrorHandler();
+  const { bookingsData, loadBookings } = useBookings();
   const [locationStats, setLocationStats] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const { selectedYear } = useApp();
-  const { handleAsync, handleError } = useErrorHandler();
 
-  // Load location-specific stats
+  // First, ensure bookings data is loaded
   useEffect(() => {
     let mounted = true;
-    
-    async function loadLocationStats() {
-      if (!locationId) return;
+
+    const loadData = async () => {
+      if (!selectedYear) return;
       
       setIsLoading(true);
       setError(null);
-      
-      await handleAsync(
-        async () => {
-          console.debug(`[LocationReport] Loading statistics for location: ${locationId} (${locationName})`);
+
+      try {
+        // Load bookings data if not already loaded
+        if (!bookingsData || bookingsData.length === 0) {
+          await loadBookings(selectedYear);
+        }
+
+        // Make data available for statsService
+        if (bookingsData && bookingsData.length > 0) {
+          window.appData = { bookingsData };
+          window.BOOKINGS_DATA_READY = true;
+        }
+
+        // Load location stats
+        if (mounted) {
           const stats = await statsService.getLocationStats(locationId);
-          
-          // Only update state if component is still mounted
-          if (!mounted) return;
-          
           if (!stats) {
-            console.warn(`[LocationReport] No statistics found for location: ${locationName}`);
             setError(`No statistics available for ${locationName}. This could be because there are no bookings for this location or there was an error loading the data.`);
             setLocationStats(null);
-            return;
-          }
-          
-          setLocationStats(stats);
-        },
-        'LocationReport.loadStats',
-        {
-          severity: ErrorSeverity.ERROR,
-          category: ErrorCategory.DATA,
-          metadata: { locationId, locationName },
-          onError: (err) => {
-            if (mounted) {
-              console.error('[LocationReport] Error loading location stats:', err);
-              setError(`Failed to load location statistics: ${err.message}`);
-            }
+          } else {
+            setLocationStats(stats);
           }
         }
-      ).finally(() => {
+      } catch (error) {
+        if (mounted) {
+          console.error('[LocationReport] Error loading data:', error);
+          setError(`Failed to load location statistics: ${error.message}`);
+        }
+      } finally {
         if (mounted) {
           setIsLoading(false);
         }
-      });
-    }
-    
-    loadLocationStats();
-    
-    // Cleanup function to prevent state updates after unmount
+      }
+    };
+
+    loadData();
+
     return () => {
       mounted = false;
     };
-  }, [locationId, locationName, handleAsync]);
+  }, [locationId, locationName, selectedYear, bookingsData, loadBookings]);
 
   // Handle export to PDF
   const handleExportPDF = async () => {

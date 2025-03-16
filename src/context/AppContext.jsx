@@ -110,13 +110,15 @@ export function AppProvider({ children }) {
     
     handleAsync(
       async () => {
-        // Make the data available globally for debugging
+        // Make the data available globally for the stats service
         if (Array.isArray(data) && data.length > 0) {
           console.log('[AppContext] Making bookings data available globally');
-          window.__BOOKINGS_DATA = data;
+          window.appData = { bookingsData: data };
+          window.BOOKINGS_DATA_READY = true;
         } else {
           console.log('[AppContext] No bookings data to make available globally');
-          delete window.__BOOKINGS_DATA;
+          window.appData = { bookingsData: [] };
+          window.BOOKINGS_DATA_READY = false;
         }
         
         dispatch({ type: ActionTypes.SET_BOOKINGS_DATA, payload: data });

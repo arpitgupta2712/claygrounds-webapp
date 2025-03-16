@@ -35,9 +35,10 @@ class DataService {
       // Check cache if not forcing refresh
       if (!forceRefresh && this.hasValidCache(year)) {
         console.debug('[DataService] Using cached data for year:', year);
+        const cachedData = loadingState.cache.get(year);
         return {
-          bookings: loadingState.cache.get(year),
-          metadata: { year, fromCache: true }
+          bookings: cachedData.data,
+          metadata: { year, fromCache: true, timestamp: cachedData.timestamp }
         };
       }
 
