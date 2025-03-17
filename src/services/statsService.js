@@ -1,6 +1,7 @@
 import { dataUtils } from '../utils/dataUtils';
 import { categoryConfigs } from '../utils/constants';
 import { groupingService } from './groupingService';
+import { isInFinancialYear } from '../utils/dateUtils';
 
 // Cache for statistics calculations
 const statsCache = new Map();
@@ -791,6 +792,54 @@ export const statsService = {
       console.error('[StatsService] Error calculating status distribution:', error);
       return {};
     }
+  },
+
+  /**
+   * Calculate daily payments collected by preferred payment modes for a specific financial year
+   * @param {Array} data - Array of booking objects
+   * @param {string} year - The financial year to filter payments
+   * @returns {Object} Daily payments by preferred mode
+   */
+  calculateDailyPaymentsByMode(data, year) {
+    const dailyPayments = {};
+    
+    // Define the mapping from actual payment modes to preferred modes
+    const paymentMapping = {
+      Cash: 'Cash',
+      UPI: 'Bank',
+      'Bank Transfer': 'Bank',
+      'Hudle App': 'Hudle',
+      'Hudle QR': 'Hudle',
+      'Hudle Wallet': 'Hudle',
+      'Venue Wallet': 'Hudle',
+      'Hudle Pass': 'Hudle',
+      'Hudle Discount': 'Hudle'
+    };
+    
+    // Iterate through each booking
+    data.forEach(booking => {
+      const date = booking['Slot Date']; // Assuming 'Slot Date' field is in DD/MM/YYYY format
+      
+      // Check if the date is in the selected financial year using dateUtils
+      if (isInFinancialYear(date, year)) {
+        // Initialize the date entry if it doesn't exist
+        if (!dailyPayments[date]) {
+          dailyPayments[date] = {
+            Cash: 0,
+            Bank: 0,
+            Hudle: 0
+          };
+        }
+        
+        // Sum payments for each mode and map to preferred modes
+        for (const [actualMode, preferredMode] of Object.entries(paymentMapping)) {
+          const amount = parseFloat(booking[actualMode]) || 0; // Safely parse the payment amount
+          dailyPayments[date][preferredMode] += amount;
+        }
+      }
+    });
+    
+    return dailyPayments;
   }
 };
 
