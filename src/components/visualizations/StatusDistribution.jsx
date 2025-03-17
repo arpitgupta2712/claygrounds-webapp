@@ -12,23 +12,21 @@ function StatusDistribution({ data, className = '' }) {
 
   if (!data || !data.statusStats) return null;
 
-  const { confirmed, cancelled, partially_cancelled } = data.statusStats;
+  const { confirmed, cancelled } = data.statusStats;
   const total = data.totalBookings;
 
   const chartData = {
-    labels: ['Confirmed', 'Cancelled', 'Partially Cancelled'],
+    labels: ['Confirmed', 'Cancelled'],
     datasets: [
       {
-        data: [confirmed, cancelled, partially_cancelled],
+        data: [confirmed, cancelled],
         backgroundColor: [
           'rgba(72, 187, 120, 0.8)',   // Green for Confirmed
           'rgba(245, 101, 101, 0.8)',   // Red for Cancelled
-          'rgba(237, 137, 54, 0.8)'     // Orange for Partially Cancelled
         ],
         borderColor: [
           'rgb(72, 187, 120)',
           'rgb(245, 101, 101)',
-          'rgb(237, 137, 54)'
         ],
         borderWidth: 1
       }
@@ -143,11 +141,6 @@ function StatusDistribution({ data, className = '' }) {
               <td className="py-2 text-red-600">Cancelled</td>
               <td className="text-right">{cancelled.toLocaleString()}</td>
               <td className="text-right">{Math.round((cancelled / total) * 100)}%</td>
-            </tr>
-            <tr>
-              <td className="py-2 text-orange-600">Partially Cancelled</td>
-              <td className="text-right">{partially_cancelled.toLocaleString()}</td>
-              <td className="text-right">{Math.round((partially_cancelled / total) * 100)}%</td>
             </tr>
             <tr className="font-semibold border-t">
               <td className="py-2">Total</td>

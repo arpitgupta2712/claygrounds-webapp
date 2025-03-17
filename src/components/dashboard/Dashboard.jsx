@@ -20,11 +20,13 @@ import ErrorDashboard from '../error/ErrorDashboard';
 import Header from './Header';
 import Navigation from './Navigation';
 import FilterControls from './FilterControls';
+import VisualizationsPage from './VisualizationsPage';
 import TableView from '../table/TableView';
 import CategoryView from '../category/CategoryView';
 import PaymentsView from '../payments/PaymentsView';
 import Loading from '../common/Loading';
 import EmptyState from '../common/EmptyState';
+import HomeView from './HomeView';
 
 /**
  * Location Report component wrapper that gets location ID from URL params
@@ -263,25 +265,27 @@ function Dashboard() {
           {isLoading ? (
             <Loading message="Loading booking data..." />
           ) : bookingsData && bookingsData.length > 0 ? (
-            <Routes>
-              <Route path="table" element={<TableView />} />
-              <Route path="locations" element={<CategoryView type="locations" />} />
-              <Route path="months" element={<CategoryView type="months" />} />
-              <Route path="sports" element={<CategoryView type="sports" />} />
-              <Route path="status" element={<CategoryView type="status" />} />
-              <Route path="source" element={<CategoryView type="source" />} />
-              <Route path="payments" element={<PaymentsView />} />
-              <Route path="errors" element={<ErrorDashboard />} />
-              <Route path="reports/:facilityId" element={<LocationReportWrapper />} />
-              <Route index element={<Navigate to="table" replace />} />
-              <Route path="*" element={
-                <EmptyState 
-                  title="Page Not Found" 
-                  message="The page you are looking for does not exist."
-                  icon="error"
-                />
-              } />
-            </Routes>
+          <Routes>
+            <Route path="home" element={<HomeView />} />
+            <Route path="visualizations" element={<VisualizationsPage />} />
+            <Route path="table" element={<TableView />} />
+            <Route path="locations" element={<CategoryView type="locations" />} />
+            <Route path="months" element={<CategoryView type="months" />} />
+            <Route path="sports" element={<CategoryView type="sports" />} />
+            <Route path="status" element={<CategoryView type="status" />} />
+            <Route path="source" element={<CategoryView type="source" />} />
+            <Route path="payments" element={<PaymentsView />} />
+            <Route path="errors" element={<ErrorDashboard />} />
+            <Route path="reports/:facilityId" element={<LocationReportWrapper />} />
+            <Route index element={<Navigate to="home" replace />} />
+            <Route path="*" element={
+              <EmptyState 
+                title="Page Not Found" 
+                message="The page you are looking for does not exist."
+                icon="error"
+              />
+            } />
+          </Routes>
           ) : (
             <EmptyState 
               title="No Bookings Found" 

@@ -152,6 +152,18 @@ function Navigation({ onViewChange }) {
         </div>
 
         <NavLink
+          to="/dashboard/visualizations"
+          className={({ isActive }) => 
+            `text-text-light py-3 px-6 rounded transition-colors min-w-[120px] text-center font-medium
+             hover:bg-gray-100 hover:text-primary
+             ${isActive ? 'bg-primary text-white shadow-md' : ''}`
+          }
+          aria-current={currentView === ViewTypes.TABLE ? 'page' : undefined}
+        >
+          Visualizations
+        </NavLink>
+
+        <NavLink
           to="/dashboard/table"
           className={({ isActive }) => 
             `text-text-light py-3 px-6 rounded transition-colors min-w-[120px] text-center font-medium
@@ -160,7 +172,7 @@ function Navigation({ onViewChange }) {
           }
           aria-current={currentView === ViewTypes.TABLE ? 'page' : undefined}
         >
-          Dashboard
+          Table
         </NavLink>
 
         <NavLink

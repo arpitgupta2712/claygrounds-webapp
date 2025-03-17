@@ -2,7 +2,7 @@
  * DailyView.jsx
  * Component for displaying payment data in a daily format
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import { useApp } from '../../context/AppContext';
 import { statsService } from '../../services/statsService';
@@ -162,6 +162,38 @@ function DailyView({ year }) {
 
   const dateArray = generateDateArray();
 
+  // Function to export daily payments to CSV
+  const exportToCSV = useCallback(() => {
+    const csvRows = [];
+    const headers = ['Date', 'Cash', 'Bank', 'Hudle', 'Total'];
+    csvRows.push(headers.join(','));
+
+    dateArray.forEach((date, index) => {
+      const payments = dailyPayments[date] || { Cash: 0, Bank: 0, Hudle: 0 };
+      const totalForDay = payments.Cash + payments.Bank + payments.Hudle;
+
+      // Skip rows with no payments
+      if (totalForDay > 0) {
+        const row = [
+          date,
+          payments.Cash,
+          payments.Bank,
+          payments.Hudle,
+          totalForDay
+        ];
+        csvRows.push(row.join(','));
+      }
+    });
+
+    const csvString = csvRows.join('\n');
+    const blob = new Blob([csvString], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.setAttribute('href', url);
+    a.setAttribute('download', `daily_payments_${year}.csv`);
+    a.click();
+  }, [dailyPayments, dateArray, year]);
+
   if (loading) {
     return <Loading message="Processing daily payment data..." />;
   }
@@ -189,6 +221,9 @@ function DailyView({ year }) {
     <div className="bg-white rounded-lg shadow p-6">
       <h3 className="text-lg font-medium text-gray-900 mb-4">Daily Payments View</h3>
       <p className="text-gray-500 mb-4">Daily payment breakdown for financial year: {year.substring(0, 4)}-{year.substring(4, 6)}</p>
+      <button onClick={exportToCSV} className="mb-4 bg-blue-500 text-white px-4 py-2 rounded">
+        Export to CSV
+      </button>
       
       <div className="overflow-x-auto">
         <table className="min-w-full border-collapse border border-gray-200">

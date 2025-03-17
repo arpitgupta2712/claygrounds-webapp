@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { ErrorProvider, ErrorDisplay } from './context/ErrorContext';
 import { AppProvider } from './context/AppContext';
 import { AuthProvider } from './context/AuthContext';
-import Dashboard from './components/dashboard/Dashboard';
+import HomeView from './pages/HomeView';
 import LoginPage from './components/auth/LoginPage';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import { withErrorBoundary } from './components/common/ErrorBoundary';
@@ -62,7 +62,7 @@ const AppWithErrorBoundary = withErrorBoundary(
               <Route path="/login" element={<LoginPage />} />
               <Route path="/dashboard/*" element={
                 <ProtectedRoute>
-                  <Dashboard />
+                  <HomeView />
                 </ProtectedRoute>
               } />
               <Route path="/" element={<Navigate to="/dashboard" replace />} />

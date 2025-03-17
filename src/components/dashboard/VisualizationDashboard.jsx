@@ -26,34 +26,31 @@ function VisualizationDashboard({ compact = false }) {
       setStats(null);
       return;
     }
-    
+
     setIsLoading(true);
-    
-    handleAsync(
-      async () => {
+
+    const calculateStats = async () => {
+      try {
         console.log('[VisualizationDashboard] Calculating summary statistics');
-        
+
         // Ensure we have all required groupings
         await Promise.all([
           groupData('payment'),
           groupData('status'),
           groupData('source')
         ]);
-        
+
         const calculatedStats = await statsService.calculateSummaryStats(filteredData);
         setStats(calculatedStats);
-      },
-      'VisualizationDashboard.calculateStats',
-      {
-        severity: ErrorSeverity.ERROR,
-        category: ErrorCategory.DATA,
-        metadata: {
-          dataLength: filteredData.length,
-          hasGroupedData: !!groupedData
-        }
+      } catch (error) {
+        console.error('Error calculating stats:', error);
+      } finally {
+        setIsLoading(false);
       }
-    ).finally(() => setIsLoading(false));
-  }, [filteredData, groupData, handleAsync, groupedData]);
+    };
+
+    calculateStats();
+  }, [filteredData]); // Only depend on filteredData
 
   if (isLoading) {
     return <Loading size="sm" message="Preparing visualizations..." className="my-6" />;

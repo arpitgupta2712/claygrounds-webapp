@@ -146,21 +146,6 @@ function SourceDistribution({ data, className = '' }) {
           </tbody>
         </table>
 
-        {/* Additional Metrics */}
-        <div className="mt-4 pt-4 border-t grid grid-cols-2 gap-4">
-          <div>
-            <h4 className="text-sm font-medium text-gray-600">Online Conversion Rate</h4>
-            <p className="text-lg font-semibold text-blue-600">
-              {Math.round(onlinePercentage)}%
-            </p>
-          </div>
-          <div>
-            <h4 className="text-sm font-medium text-gray-600">Offline Conversion Rate</h4>
-            <p className="text-lg font-semibold text-green-600">
-              {Math.round(offlinePercentage)}%
-            </p>
-          </div>
-        </div>
       </div>
     </div>
   );

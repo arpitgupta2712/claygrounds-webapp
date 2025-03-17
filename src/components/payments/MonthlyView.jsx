@@ -2,6 +2,7 @@ import PropTypes from 'prop-types';
 import { useApp } from '../../context/AppContext';
 import { statsService } from '../../services/statsService';
 import { dataUtils } from '../../utils/dataUtils';
+import { useCallback } from 'react';
 
 /**
  * MonthlyView component for displaying payment data in a monthly format
@@ -38,10 +39,39 @@ function MonthlyView({ year }) {
     );
   }
 
+  // Function to export monthly payments to CSV
+  const exportToCSV = useCallback(() => {
+    const csvRows = [];
+    const headers = ['Month', 'Cash', 'Bank', 'Hudle', 'Total'];
+    csvRows.push(headers.join(','));
+
+    monthlyPayments.forEach(monthData => {
+      const row = [
+        monthData.month,
+        monthData.cashAmount,
+        monthData.bankAmount,
+        monthData.hudleAmount,
+        monthData.totalAmount
+      ];
+      csvRows.push(row.join(','));
+    });
+
+    const csvString = csvRows.join('\n');
+    const blob = new Blob([csvString], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.setAttribute('href', url);
+    a.setAttribute('download', `monthly_payments_${year}.csv`);
+    a.click();
+  }, [monthlyPayments, year]);
+
   return (
     <div className="bg-white rounded-lg shadow p-6">
       <h3 className="text-lg font-medium text-gray-900 mb-4">Monthly Payments View</h3>
       <p className="text-gray-500 mb-6">Monthly view for year: {year}</p>
+      <button onClick={exportToCSV} className="mb-4 bg-blue-500 text-white px-4 py-2 rounded">
+        Export to CSV
+      </button>
       
       {/* Monthly Payments Table */}
       <div className="overflow-x-auto">
