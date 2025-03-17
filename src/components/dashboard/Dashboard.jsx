@@ -20,13 +20,13 @@ import ErrorDashboard from '../error/ErrorDashboard';
 import Header from './Header';
 import Navigation from './Navigation';
 import FilterControls from './FilterControls';
-import VisualizationsPage from './VisualizationsPage';
+import VisualizationsPage from '../../pages/VisualizationsPage';
 import TableView from '../table/TableView';
 import CategoryView from '../category/CategoryView';
 import PaymentsView from '../payments/PaymentsView';
 import Loading from '../common/Loading';
 import EmptyState from '../common/EmptyState';
-import HomeView from './HomeView';
+import HomeView from '../../pages/HomeView';
 
 /**
  * Location Report component wrapper that gets location ID from URL params
@@ -277,7 +277,7 @@ function Dashboard() {
             <Route path="payments" element={<PaymentsView />} />
             <Route path="errors" element={<ErrorDashboard />} />
             <Route path="reports/:facilityId" element={<LocationReportWrapper />} />
-            <Route index element={<Navigate to="home" replace />} />
+            <Route index element={<Navigate to="visualizations" replace />} />
             <Route path="*" element={
               <EmptyState 
                 title="Page Not Found" 
@@ -288,8 +288,8 @@ function Dashboard() {
           </Routes>
           ) : (
             <EmptyState 
-              title="No Bookings Found" 
-              message="There are no bookings available for the selected filters." 
+              title="Loading Data..." 
+              message="Please wait while we load the data." 
             />
           )}
         </div>

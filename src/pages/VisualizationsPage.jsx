@@ -2,8 +2,6 @@ import { useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { useBookings } from '../hooks/useBookings';
 import PageTitle from '../components/common/PageTitle';
-import YearSelector from '../components/common/YearSelector';
-import FilterSelector from '../components/filters/FilterSelector';
 import VisualizationDashboard from '../components/dashboard/VisualizationDashboard';
 
 /**
@@ -23,14 +21,10 @@ function VisualizationsPage() {
       {/* Header section with title and actions */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
         <div>
-          <PageTitle title="Visualizations" />
+          <PageTitle title="Dashboard" />
           <p className="text-gray-600 mt-2">
-            Interactive visual analytics for booking data. Analyze patterns across payment methods, booking status, and sources.
+            Interactive visual analytics for booking data.
           </p>
-        </div>
-        <div className="flex items-center space-x-4 mt-4 md:mt-0">
-          <YearSelector />
-          <FilterSelector />
         </div>
       </div>
 
