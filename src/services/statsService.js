@@ -553,9 +553,9 @@ export const statsService = {
         bankAmount,
         hudleAmount,
         totalAmount,
-        cashPercentage: totalAmount > 0 ? Math.round((cashAmount / totalAmount) * 100) : 0,
-        bankPercentage: totalAmount > 0 ? Math.round((bankAmount / totalAmount) * 100) : 0,
-        hudlePercentage: totalAmount > 0 ? Math.round((hudleAmount / totalAmount) * 100) : 0
+        cashPercentage: totalAmount > 0 ? (cashAmount / totalAmount) * 100 : 0,
+        bankPercentage: totalAmount > 0 ? (bankAmount / totalAmount) * 100 : 0,
+        hudlePercentage: totalAmount > 0 ? (hudleAmount / totalAmount) * 100 : 0
       };
     });
   },
