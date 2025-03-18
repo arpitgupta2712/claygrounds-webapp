@@ -32,10 +32,15 @@ export const useFilters = () => {
     
     return handleAsync(
       async () => {
-        // Use dataUtils to get unique values
-        const uniqueLocations = dataUtils.getUniqueValues(bookingsData, 'Location');
-        console.log(`[useFilters] Found ${uniqueLocations.length} unique locations`);
-        return uniqueLocations;
+        try {
+          // Use dataUtils to get unique values
+          const uniqueLocations = dataUtils.getUniqueValues(bookingsData, 'Location');
+          console.log(`[useFilters] Found ${uniqueLocations.length} unique locations`);
+          return Array.isArray(uniqueLocations) ? uniqueLocations : [];
+        } catch (error) {
+          console.error('[useFilters] Error processing locations:', error);
+          return [];
+        }
       },
       'useFilters.locations',
       {
@@ -54,7 +59,9 @@ export const useFilters = () => {
    * Get locations from memoized data for dropdown
    * @returns {Array} Array of unique locations
    */
-  const getLocations = useCallback(() => locations, [locations]);
+  const getLocations = useCallback(() => {
+    return locations || [];
+  }, [locations]);
 
   /**
    * Handle filter type change

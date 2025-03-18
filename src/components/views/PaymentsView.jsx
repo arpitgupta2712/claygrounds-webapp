@@ -95,7 +95,7 @@ function PaymentsView() {
   useEffect(() => {
     setIsLoading(true);
     preparePaymentData();
-  }, [preparePaymentData]);
+  }, [filteredData]);
 
   const handlePaymentAction = useCallback(async (action, paymentId) => {
     try {

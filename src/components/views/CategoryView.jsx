@@ -43,8 +43,15 @@ function CategoryView({ type }) {
   const { filteredData } = useApp();
   const { groupData } = useBookings();
   const { handleAsync, handleError } = useErrorHandler();
+  
+  // Used to track if component is mounted to prevent state updates after unmount
+  const isMountedRef = useCallback(() => {
+    const mounted = { current: true };
+    return () => mounted.current;
+  }, [])();
 
   const prepareChartData = useCallback(async () => {
+    // Skip if no data to process
     if (!filteredData || filteredData.length === 0) {
       setChartData(null);
       setIsLoading(false);
@@ -54,14 +61,18 @@ function CategoryView({ type }) {
     try {
       await handleAsync(
         async () => {
-          console.log(`[CategoryView] Preparing chart data for type: ${type}`);
+          console.log(`[CategoryView] Preparing chart data for type: ${type} with ${filteredData.length} records`);
           
           // Group data by category
           await groupData(type);
           
           // Generate chart data
           const data = await chartService.generateChartData(filteredData, type);
-          setChartData(data);
+          
+          // Only update state if component is still mounted
+          if (isMountedRef()) {
+            setChartData(data);
+          }
         },
         'CategoryView.prepareChartData',
         {
@@ -84,16 +95,30 @@ function CategoryView({ type }) {
           dataLength: filteredData.length
         }
       );
-      setChartData(null);
+      if (isMountedRef()) {
+        setChartData(null);
+      }
     } finally {
-      setIsLoading(false);
+      if (isMountedRef()) {
+        setIsLoading(false);
+      }
     }
-  }, [filteredData, type, groupData, handleAsync, handleError]);
+  }, [type, groupData, handleAsync, handleError, filteredData, isMountedRef]);
 
+  // Effect to handle data changes
   useEffect(() => {
+    // Debug logs
+    console.log(`[CategoryView] Data or type changed - type: ${type}, data length: ${filteredData?.length || 0}`);
+    
+    // Set loading state and prepare chart data
     setIsLoading(true);
     prepareChartData();
-  }, [prepareChartData]);
+    
+    // Cleanup function
+    return () => {
+      console.log(`[CategoryView] Cleaning up effect for type: ${type}`);
+    };
+  }, [filteredData, type, prepareChartData]);
 
   const handleChartClick = useCallback(async (event, data) => {
     try {
@@ -127,10 +152,12 @@ function CategoryView({ type }) {
     }
   }, [type, handleAsync, handleError]);
 
+  // Show loading state
   if (isLoading) {
     return <Loading message={`Loading ${type} data...`} />;
   }
 
+  // Show empty state if no chart data
   if (!chartData) {
     return (
       <EmptyState
@@ -140,6 +167,7 @@ function CategoryView({ type }) {
     );
   }
 
+  // Render the category view with charts
   return (
     <div className="space-y-6">
       {/* Summary Statistics */}
@@ -171,4 +199,4 @@ export default withErrorBoundary(CategoryView, {
     feature: 'category-view',
     importance: 'high'
   }
-}); 
+});

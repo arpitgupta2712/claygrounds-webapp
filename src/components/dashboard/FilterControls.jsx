@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useFilters } from '../../hooks/useFilters';
 import { FilterTypes } from '../../utils/constants';
+import locations from '../../locations.json';
 
 /**
  * FilterControls component for data filtering
@@ -20,7 +21,7 @@ function FilterControls() {
     locationValue,
     textValue,
     balanceChecked,
-    setFilterType,
+    handleFilterTypeChange,
     setSingleDate,
     setStartDate,
     setEndDate,
@@ -30,8 +31,8 @@ function FilterControls() {
     isInputVisible,
     getTextPlaceholder,
     getLocations,
-    applyFilter,
-    resetFilter,
+    handleApplyFilter,
+    handleResetFilter,
     initFromActiveFilters
   } = useFilters();
 
@@ -46,7 +47,11 @@ function FilterControls() {
   }, [initFromActiveFilters, activeFilters]);
 
   // Get locations for dropdown
-  const locations = getLocations();
+  const formattedLocations = locations.map(loc => ({
+    id: loc.Location_id,
+    name: loc.Location_name
+  }));
+
 
   // Close filter type dropdown when clicking outside
   useEffect(() => {
@@ -68,9 +73,9 @@ function FilterControls() {
   };
 
   // Enhanced reset handler that tracks the reset to prevent re-initialization
-  const handleResetFilter = () => {
+  const handleResetWithTracking = () => {
     resetTriggeredRef.current = true;
-    resetFilter();
+    handleResetFilter();
   };
 
   return (
@@ -102,7 +107,7 @@ function FilterControls() {
                 className={`w-full text-left px-4 py-2 text-sm text-text-light hover:bg-gray-100
                           ${!filterType ? 'bg-primary text-white' : ''}`}
                 onClick={() => {
-                  setFilterType('');
+                  handleFilterTypeChange('');
                   setIsFilterTypeOpen(false);
                 }}
               >
@@ -114,7 +119,7 @@ function FilterControls() {
                   className={`w-full text-left px-4 py-2 text-sm text-text-light hover:bg-gray-100
                             ${filterType === value ? 'bg-primary text-white' : ''}`}
                   onClick={() => {
-                    setFilterType(value);
+                    handleFilterTypeChange(value);
                     setIsFilterTypeOpen(false);
                   }}
                 >
@@ -160,20 +165,20 @@ function FilterControls() {
 
         {/* Location Select */}
         {isInputVisible('location') && (
-          <select
-            id="locationSelect"
-            className="py-3 px-5 rounded border border-gray-300 bg-white text-text-medium shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary min-w-[180px]"
-            value={locationValue}
-            onChange={(e) => setLocationValue(e.target.value)}
-          >
-            <option value="">Select Location</option>
-            {locations.map((location) => (
-              <option key={location} value={location}>
-                {location}
-              </option>
-            ))}
-          </select>
-        )}
+        <select
+          id="locationSelect"
+          className="py-3 px-5 rounded border border-gray-300 bg-white text-text-medium shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary min-w-[180px]"
+          value={locationValue}
+          onChange={(e) => setLocationValue(e.target.value)}
+        >
+          <option value="">Select Location</option>
+          {formattedLocations.map((location) => (
+            <option key={location.id} value={location.name}>
+              {location.name}
+            </option>
+          ))}
+        </select>
+      )}
 
         {/* Text Input (Customer, Booking Ref, Phone) */}
         {isInputVisible('text') && (
@@ -207,7 +212,7 @@ function FilterControls() {
         <button
           id="applyFilter"
           className="py-3 px-5 bg-primary text-white rounded shadow hover:bg-primary-light transition-colors min-w-[100px] font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-          onClick={applyFilter}
+          onClick={handleApplyFilter} // FIXED: was "applyFilter"
           disabled={!filterType}
         >
           Apply Filter
@@ -216,7 +221,7 @@ function FilterControls() {
         <button
           id="resetFilter"
           className="py-3 px-5 bg-white border border-gray-300 text-text-medium rounded hover:bg-gray-50 transition-colors min-w-[100px] font-medium"
-          onClick={handleResetFilter}
+          onClick={handleResetWithTracking} // FIXED: was "handleResetFilter"
         >
           Reset
         </button>

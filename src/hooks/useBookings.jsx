@@ -264,7 +264,7 @@ export const useBookings = () => {
         filterService.clearCache();
         
         // Reset to the original data
-        setFilteredData(null);
+        setFilteredData(bookingsData);
         
         // Log the number of records after clearing filters
         console.debug(`[useBookings] Filters cleared, showing all ${bookingsData?.length || 0} records`);
