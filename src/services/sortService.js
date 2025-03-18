@@ -140,6 +140,44 @@ export const sortService = {
   },
   
   /**
+   * Sort months in financial year order (April to March)
+   * @param {Array<Array>} entries - Array of [key, value] entries where key is a month string
+   * @returns {Array<Array>} Sorted entries
+   */
+  sortMonthsInFinancialYearOrder(entries) {
+    console.log('[SortService] Sorting months in financial year order');
+    
+    // Define month order for financial year (April to March)
+    const monthOrder = [
+      'April', 'May', 'June', 'July', 'August', 'September',
+      'October', 'November', 'December', 'January', 'February', 'March'
+    ];
+    
+    // Extract month and year from month string (e.g., "April 2024")
+    const extractMonthAndYear = (monthStr) => {
+      const parts = monthStr.split(' ');
+      return {
+        month: parts[0],
+        year: parseInt(parts[1] || '0', 10)
+      };
+    };
+    
+    // Sort entries by financial year month order
+    return [...entries].sort(([a], [b]) => {
+      const monthA = extractMonthAndYear(a);
+      const monthB = extractMonthAndYear(b);
+      
+      // If years are different, sort by year first
+      if (monthA.year !== monthB.year) {
+        return monthA.year - monthB.year;
+      }
+      
+      // If years are the same, sort by month order
+      return monthOrder.indexOf(monthA.month) - monthOrder.indexOf(monthB.month);
+    });
+  },
+  
+  /**
    * Determine the data type of a field from sample data
    * @param {Array} data - Data array to analyze
    * @param {string} field - Field to analyze

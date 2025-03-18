@@ -11,13 +11,14 @@ import CategoryDetail from './CategoryDetail';
 import Loading from '../common/Loading';
 import React from 'react';
 import PropTypes from 'prop-types';
+import { sortService } from '../../services/sortService';
 
 /**
  * CategoryView component for displaying category-specific statistics
  */
 const CategoryView = React.memo(function CategoryView({ type }) {
   const [stats, setStats] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true); // Start with loading=true
   const [selectedCategory, setSelectedCategory] = useState(null);
   const { filteredData } = useApp();
   const { groupedData, groupData } = useBookings();
@@ -25,117 +26,90 @@ const CategoryView = React.memo(function CategoryView({ type }) {
   
   // Add stats cache ref
   const statsCache = useRef(new Map());
-  const lastCalculationRef = useRef({ type, data: null });
+  const lastCalculationRef = useRef({ type, data: null, dataLength: 0 });
 
   // Memoize category configuration
   const config = useMemo(() => categoryConfigs[type], [type]);
 
-  // Memoize the grouped data for this category to prevent unnecessary recalculations
+  // Directly trigger groupData when type changes or filteredData changes
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        console.log(`[CategoryView] Directly grouping data for type: ${type}`);
+        setIsLoading(true);
+        await groupData(type); // Directly trigger grouping when component mounts or type changes
+      } catch (error) {
+        console.error(`[CategoryView] Error grouping data: ${error.message}`);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    loadData();
+  }, [type, groupData, filteredData]);
+
+  // Memoize the grouped data for this category
   const categoryGroupedData = useMemo(() => {
-    return groupedData[type] || {};
+    const data = groupedData[type] || {};
+    console.log(`[CategoryView] Grouped data for ${type}:`, {
+      keysCount: Object.keys(data).length,
+      keys: Object.keys(data)
+    });
+    return data;
   }, [groupedData, type]);
 
-  // Check if recalculation is needed
-  const shouldRecalculate = useCallback(() => {
-    if (!categoryGroupedData || !filteredData) return false;
-    const lastCalc = lastCalculationRef.current;
-    return lastCalc.type !== type || lastCalc.data !== filteredData;
-  }, [categoryGroupedData, filteredData, type]);
+  // Calculate stats when groupedData changes
+  useEffect(() => {
+    const calculateCategoryStats = async () => {
+      if (!categoryGroupedData || Object.keys(categoryGroupedData).length === 0) {
+        console.log(`[CategoryView] No grouped data for ${type}, skipping stats calculation`);
+        setStats(null);
+        return;
+      }
 
-  // Memoize stats calculation function
-  const calculateStats = useCallback(async () => {
-    if (!filteredData || !config) return;
-    
-    // Skip if no recalculation needed
-    if (!shouldRecalculate()) {
-      logger.debug('[CategoryView] Using cached stats for', type);
-      return;
-    }
-
-    setIsLoading(true);
-
-    try {
-      await handleAsync(
-        async () => {
-          // Ensure we have the required grouping
-          if (!groupedData[type]) {
-            await groupData(type);
-            return; // The useEffect will trigger again with new groupedData
-          }
-
-          // Calculate stats for each category item in parallel
-          const categoryStats = {};
-          const calculations = Object.entries(categoryGroupedData).map(async ([key, bookings]) => {
+      setIsLoading(true);
+      
+      try {
+        console.log(`[CategoryView] Calculating stats for ${Object.keys(categoryGroupedData).length} ${type} items`);
+        
+        // Calculate stats for each category item in parallel
+        const categoryStats = {};
+        const calculations = await Promise.all(
+          Object.entries(categoryGroupedData).map(async ([key, bookings]) => {
             try {
-              // Check cache first
-              const cacheKey = `${key}:${bookings.length}:${type}`;
-              if (statsCache.current.has(cacheKey)) {
-                return [key, statsCache.current.get(cacheKey)];
-              }
-
-              // Only log when actually calculating (not using cache)
-              logger.debug(`[CategoryView] Calculating stats for ${key}`);
-              const stats = await statsService.calculateCategoryStats(
-                bookings,
-                key,
-                config
-              );
-              
-              // Cache the result
-              statsCache.current.set(cacheKey, stats);
-              return [key, stats];
+              // Calculate stats for this category
+              console.log(`[CategoryView] Calculating stats for ${key} (${bookings.length} bookings)`);
+              const result = await statsService.calculateCategoryStats(bookings, key, config);
+              return [key, result];
             } catch (error) {
-              handleError(
-                error,
-                'CategoryView.calculateCategoryStats',
-                ErrorSeverity.ERROR,
-                ErrorCategory.DATA,
-                { category: key, bookingsCount: bookings.length }
-              );
+              console.error(`[CategoryView] Error calculating stats for ${key}:`, error);
               return [key, null];
             }
-          });
-
-          // Wait for all calculations to complete
-          const results = await Promise.all(calculations);
-          
-          // Filter out failed calculations and update state
-          const validResults = results.filter(([_, result]) => result !== null);
-          const categoryStatsObj = Object.fromEntries(validResults);
-          
-          // Update last calculation reference and set stats
-          lastCalculationRef.current = { type, data: filteredData };
-          setStats(categoryStatsObj);
-        },
-        'CategoryView.calculateStats',
-        {
-          severity: ErrorSeverity.ERROR,
-          category: ErrorCategory.DATA,
-          metadata: {
-            type,
-            dataLength: filteredData.length,
-            categoriesCount: Object.keys(categoryGroupedData).length
-          }
-        }
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  }, [filteredData, type, config, groupData, categoryGroupedData, handleAsync, handleError, shouldRecalculate]);
-
-  // Calculate stats when data changes
-  useEffect(() => {
-    if (shouldRecalculate()) {
-      calculateStats();
-    }
-  }, [calculateStats, shouldRecalculate]);
-
-  // Clear cache when component unmounts
-  useEffect(() => {
-    return () => {
-      statsCache.current.clear();
+          })
+        );
+        
+        // Filter out failed calculations and build stats object
+        calculations.forEach(([key, result]) => {
+          if (result) categoryStats[key] = result;
+        });
+        
+        console.log(`[CategoryView] Stats calculation complete for ${type}:`, {
+          keysCount: Object.keys(categoryStats).length,
+          keys: Object.keys(categoryStats)
+        });
+        
+        // Set the stats
+        setStats(categoryStats);
+      } catch (error) {
+        console.error(`[CategoryView] Error calculating category stats: ${error.message}`);
+        setStats(null);
+      } finally {
+        setIsLoading(false);
+      }
     };
-  }, []);
+    
+    calculateCategoryStats();
+  }, [categoryGroupedData, config, type]);
 
   // Handle category card click
   const handleCategoryClick = useCallback((title, categoryStats) => {
@@ -153,9 +127,25 @@ const CategoryView = React.memo(function CategoryView({ type }) {
 
   // Memoize category cards rendering
   const categoryCards = useMemo(() => {
-    if (!stats || !config) return null;
+    if (!stats || !config) {
+      console.log(`[CategoryView] No stats or config available for rendering cards`);
+      return null;
+    }
 
-    const sortedEntries = Object.entries(stats).sort(([a], [b]) => a.localeCompare(b));
+    const entries = Object.entries(stats);
+    console.log(`[CategoryView] Rendering ${entries.length} category cards for ${type}`);
+    
+    if (entries.length === 0) {
+      return (
+        <div className="p-6 bg-gray-100 rounded-lg text-center">
+          <p className="text-gray-600">No data available for the selected filter.</p>
+        </div>
+      );
+    }
+    
+    const sortedEntries = type === 'months' 
+  ? sortService.sortMonthsInFinancialYearOrder(entries)
+  : entries.sort(([a], [b]) => a.localeCompare(b));
     
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -170,12 +160,30 @@ const CategoryView = React.memo(function CategoryView({ type }) {
         ))}
       </div>
     );
-  }, [stats, config, handleCategoryClick]);
+  }, [stats, config, handleCategoryClick, type]);
 
-  // Early return cases
-  if (!config) return null;
-  if (isLoading) return <Loading message="Calculating statistics..." />;
-  if (!stats) return null;
+  // Show loading state
+  if (isLoading) {
+    return <Loading message={`Loading ${type} statistics...`} />;
+  }
+
+  // Show empty state if no grouped data
+  if (!categoryGroupedData || Object.keys(categoryGroupedData).length === 0) {
+    return (
+      <div className="p-6 bg-gray-100 rounded-lg text-center">
+        <p className="text-gray-600">No {type} data available for the selected filters.</p>
+      </div>
+    );
+  }
+
+  // Show empty state if no stats
+  if (!stats || Object.keys(stats).length === 0) {
+    return (
+      <div className="p-6 bg-gray-100 rounded-lg text-center">
+        <p className="text-gray-600">No statistics available for the selected filters.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
